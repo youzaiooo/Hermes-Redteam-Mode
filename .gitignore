@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+.DS_Store
+
+# Engagement data never lives in the repo.
+redteam/
+*.db
+index.db
+session.json
+raw/

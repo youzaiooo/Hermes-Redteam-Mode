@@ -1,0 +1,75 @@
+name: hermes-redteam
+version: 0.1.0
+description: "Authorized engagement index and local wiki. No exploit tooling."
+author: Youzai
+kind: standalone
+platforms:
+  - linux
+provides_tools:
+  - redteam_engagement_open
+  - redteam_session_bind
+  - redteam_asset_add
+  - redteam_asset_query
+  - redteam_preflight
+  - redteam_evidence_add
+  - redteam_reserve
+  - redteam_release
+  - redteam_finding_add
+  - redteam_report_skeleton
+  - redteam_vuln_add
+  - redteam_http_evidence_add
+  - redteam_access_add
+  - redteam_credential_add
+  - redteam_vuln_update
+  - redteam_sessions
+  - redteam_tunnel_add
+  - redteam_tunnel_list
+  - redteam_poc_add
+  - redteam_poc_search
+  - redteam_asset_link
+  - redteam_asset_graph
+  - redteam_web_list
+  - redteam_chain_add
+  - redteam_asset_assess
+  - redteam_domain_index
+  - redteam_session_info
+  - redteam_attack_file_add
+  - redteam_score_list
+  - redteam_asset_timeline
+  - redteam_report_index
+  - redteam_credential_list
+  - redteam_access_list
+  - redteam_tunnel_update
+  - redteam_attack_file_list
+  - redteam_poc_list
+  - redteam_chain_list
+  - redteam_webshell_add
+  - redteam_webshell_update
+  - redteam_webshell_list
+  - redteam_session_check
+  - redteam_asset_get
+  - redteam_asset_stats
+  - redteam_asset_test
+  - redteam_poc_get
+  - redteam_poc_update
+  - redteam_poc_use
+  - redteam_chain
+  - redteam_attack_chain
+  - redteam_attack_path
+  - redteam_roles
+  - redteam_role_prompt
+  - redteam_role_prompt_reset
+  - redteam_score_hit
+  - redteam_shot_add
+  - redteam_shot_list
+  - redteam_shot_delete
+  - redteam_agent_slot
+  - redteam_score_report
+  - redteam_score_point_save
+  - redteam_score_point_get
+  - redteam_scan_add
+  - redteam_scan_list
+  - redteam_note_add
+  - redteam_note_list
+  - redteam_knowledge_add
+  - redteam_knowledge_list

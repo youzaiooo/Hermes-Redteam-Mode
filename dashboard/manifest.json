@@ -1,0 +1,15 @@
+{
+  "name": "hermes-redteam",
+  "api": "plugin_api.py",
+  "tabs": [
+    "board",
+    "assets",
+    "findings",
+    "sessions",
+    "tunnels",
+    "score",
+    "skills",
+    "roles",
+    "report"
+  ]
+}
