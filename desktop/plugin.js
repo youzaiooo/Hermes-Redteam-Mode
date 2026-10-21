@@ -185,25 +185,16 @@ function assetsChildren({ engagement, assetRows, loading, error }) {
     jsx('div', { className: 'text-xs text-(--ui-text-tertiary)', children: `资产 ${assetRows.length}` }),
     ...assetRows.slice(0, 100).map((asset) =>
       jsxs('div', {
-        className: 'rounded border border-(--ui-stroke-secondary) px-2 py-1.5',
+        className: 'grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded border border-(--ui-stroke-secondary) px-2 py-1.5',
         children: [
-          jsxs('div', {
-            className: 'flex items-center justify-between gap-2',
-            children: [
-              jsx('span', {
-                className: 'truncate text-xs text-(--ui-text-primary)',
-                children: asset.address || asset.stable_key
-              }),
-              jsx(Badge, { variant: 'outline', children: asset.status || 'new' })
-            ]
+          jsx('span', {
+            className: 'truncate text-xs text-(--ui-text-primary)',
+            children: asset.address || asset.stable_key
           }),
-          jsxs('div', {
-            className: 'mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.6875rem] text-(--ui-text-tertiary)',
-            children: [
-              jsx('span', { children: `端口 ${asset.port || 0}` }),
-              jsx('span', { children: `服务 ${asset.service || '-'}` }),
-              jsx('span', { children: `标题 ${asset.title || '-'}` })
-            ]
+          jsx(Badge, { variant: 'outline', children: asset.status || 'new' }),
+          jsx('span', {
+            className: 'text-xs text-(--ui-text-tertiary)',
+            children: (asset.first_seen || '').slice(0, 10)
           })
         ]
       }, asset.stable_key || asset.address)
@@ -223,22 +214,10 @@ function resultsChildren({ engagement, vulnRows, credRows, tunnelRows, loading, 
     jsxs('div', {
       className: 'rounded border border-(--ui-stroke-secondary) px-2 py-1.5',
       children: [
-        jsxs('div', {
-          className: 'flex items-center justify-between gap-2',
-          children: [
-            jsx('div', {
-              className: 'truncate text-xs text-(--ui-text-primary)',
-              children: vuln.title || vuln.asset_key
-            }),
-            jsx(Badge, { variant: 'outline', children: vuln.status || '-' })
-          ]
-        }),
-        jsxs('div', {
-          className: 'mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.6875rem] text-(--ui-text-tertiary)',
-          children: [
-            jsx('span', { children: `等级 ${vuln.severity || '-'}` }),
-            jsx('span', { children: `资产 ${vuln.asset_key || '-'}` })
-          ]
+        jsx('div', { className: 'truncate text-xs text-(--ui-text-primary)', children: vuln.asset_key }),
+        jsx('div', {
+          className: 'truncate text-xs text-(--ui-text-tertiary)',
+          children: `${vuln.status || ''} · ${vuln.evidence_path || ''}`
         })
       ]
     }, vuln.asset_key)
@@ -510,7 +489,11 @@ export default {
       id: 'pane',
       area: 'panes',
       title: 'RedTeam 控制台',
-      data: { placement: 'right', width: '340px' },
+      data: {
+        placement: 'right',
+        dock: { pane: 'workspace', pos: 'right' },
+        width: '340px'
+      },
       render: () => jsx(Pane, { rest: ctx.rest })
     })
   }

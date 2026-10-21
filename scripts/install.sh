@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Enable hermes-redteam for the commander and the five permanent worker profiles.
+# Safe to re-run. Does not restart the gateway.
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HERMES="${HERMES_BIN:-hermes}"
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+
+echo "==> plugin dir: $REPO_DIR"
+if [ ! -d "$HERMES_HOME/plugins/hermes-redteam" ]; then
+  ln -sfn "$REPO_DIR" "$HERMES_HOME/plugins/hermes-redteam"
+fi
+
+echo "==> desktop half"
+mkdir -p "$HERMES_HOME/desktop-plugins/hermes-redteam"
+cp "$REPO_DIR/desktop/plugin.js" "$HERMES_HOME/desktop-plugins/hermes-redteam/plugin.js"
+# A bare folder with plugin.js is loaded as a standalone desktop plugin. A stale
+# package marker makes the app treat it as a managed copy and skip it.
+rm -f "$HERMES_HOME/desktop-plugins/hermes-redteam/.hermes-package.json"
+
+echo "==> enable for default + rt-* profiles"
+"$HERMES" plugins enable hermes-redteam --no-allow-tool-override >/dev/null 2>&1 || true
+for profile in rt-recon rt-asset rt-vuln rt-exploit rt-internal; do
+  if "$HERMES" profile list 2>/dev/null | grep -q "$profile"; then
+    "$HERMES" -p "$profile" plugins enable hermes-redteam --no-allow-tool-override >/dev/null 2>&1 || true
+  fi
+done
+
+echo "==> enable the hermes-redteam toolset"
+"$HERMES" tools enable hermes-redteam --platform cli >/dev/null 2>&1 || true
+"$HERMES" tools enable hermes-redteam --platform desktop >/dev/null 2>&1 || true
+
+echo "==> doctor"
+"$HERMES" plugins doctor hermes-redteam 2>&1 | tail -6
+
+cat <<'EOF'
+
+Done. Next:
+  1) hermes gateway restart
+  2) Hermes desktop -> 右上角「显示右侧栏」-> RedTeam 控制台
+  3) 命令面板 ⌘K -> Reload desktop plugins（如果面板没出现）
+EOF

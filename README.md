@@ -1,69 +1,82 @@
 # hermes-redteam
 
-Hermes agent 插件 + 桌面面板，用来记录**已授权**演练的资产、漏洞、访问、隧道与报告索引。
+把 Hermes Agent 变成一台**已授权**的红队作战指挥台：一个靶标名称 → 指挥会话开靶标 → 按阶段把任务派给五个常驻执行 profile → 资产/漏洞/凭据/隧道/得分全部落进每靶标独立的 SQLite 事实库 → 右侧中文控制台实时可视化。
 
-插件只做编排与索引：不内置 exploit、payload、凭据真值或 WebShell 管理器。演练事实落在 `$HERMES_HOME/redteam/engagements/<id>/`，不进仓库、不进共享 Wiki、不进记忆。
+> 仅限已获授权的攻防演练 / 渗透测试。仓库不包含 exploit、payload 或凭据真值；事实只落本机 `$HERMES_HOME/redteam/engagements/<id>/`。
+
+## 和原项目的区别
+
+原项目 [dsh-redteam-mode](https://github.com/Jueze-2019/dsh-redteam-mode) 在 DSH 里**临时拉起子智能体**；本项目按用户的设计改为：
+
+- **五个常驻 profile**：`rt-recon` / `rt-asset` / `rt-vuln` / `rt-exploit` / `rt-internal`。每个有自己的模型、技能、记忆与工具面，技能上限更高，可以独立升级。
+- **Sekhmet（default）只做指挥**：只拿读取/查询/派工工具，不拿执行工具，保持精简。
+- **派工走 Hermes kanban**：`redteam_dispatch` 建卡 → 网关 dispatcher 拉起对应 profile → worker 干完活把结果落到靶标库 → 指挥用 `redteam_dispatch_status` 跟进。
 
 ## 结构
 
 ```
-plugin.yaml            # 插件清单（56 个工具声明）
-__init__.py            # register(ctx) 入口
-store.py               # SQLite 索引：资产/漏洞/访问/隧道/报告
-tools.py               # 工具注册
-score.py               # 三档得分开关：off / visible / enforced
-preflight.py           # 授权预检
-roles/                 # 五个执行角色的提示词
-skills/                # 24 个角色技能
+plugin.yaml           # 插件清单（指挥官工具面）
+__init__.py           # register(ctx)：按 profile 分发工具与技能
+dispatch.py           # redteam_dispatch / dispatch_status（kanban 派工）
+store.py              # 每靶标 SQLite：资产/漏洞/证据/凭据/隧道/攻击链/得分
+tools.py              # 工具 schema + handler
+preflight.py          # 工具/授权预检
+roles/                # 五个执行角色提示词
+skills/               # 指挥 + 25 个实战技能（从 DSH 原项目移植）
 dashboard/
-  manifest.json
-  plugin_api.py        # 只读路由，挂在 /api/plugins/hermes-redteam/
-desktop/
-  plugin.js            # 桌面面板（Hermes desktop 的 UI 半边）
+  plugin_api.py       # /api/plugins/hermes-redteam/* 只读数据
+desktop/plugin.js     # 中文桌面面板（态势/资产/成果/报告/资源）
 tests/
-SPEC.md  PLAN.md  SESSION.md
 ```
 
 ## 安装
 
-### 1. 插件本体（网关侧）
+### 方式 A：一条命令（推荐）
 
 ```bash
-git clone <this-repo> ~/.hermes/plugins/hermes-redteam
-hermes plugins doctor hermes-redteam     # 确认工具注册
+hermes plugins install youzaiooo/hermes-redteam --enable
+bash ~/.hermes/plugins/hermes-redteam/scripts/install.sh
 ```
 
-然后在该 profile 的 `config.yaml` 里 enable（`plugins.enabled` 加 `hermes-redteam`）。
-`/api/plugins/hermes-redteam/*` 只在这个开关打开时才会挂载。
+`install.sh` 做三件事：给 `default` 和五个 `rt-*` profile 启用插件与 `hermes-redteam` 工具集；把桌面半边复制到 `~/.hermes/desktop-plugins/hermes-redteam/`；跑一次 `hermes plugins doctor`。
 
-### 2. 桌面面板（每台客户端各一份）
+然后：
 
-桌面插件由客户端本地磁盘加载，网关不推送。所以每台要连的 Hermes desktop 都要有这份文件：
+1. 重启网关：`hermes gateway restart`
+2. 打开 Hermes desktop → 右上角 **显示右侧栏** → 选择 **RedTeam 控制台**
+3. 没有面板时：⌘K → **Reload desktop plugins**
+
+### 方式 B：源码开发
 
 ```bash
-mkdir -p ~/.hermes/desktop-plugins/hermes-redteam
-cp desktop/plugin.js ~/.hermes/desktop-plugins/hermes-redteam/plugin.js
+git clone https://github.com/youzaiooo/hermes-redteam ~/src/hermes-redteam
+ln -sfn ~/src/hermes-redteam ~/.hermes/plugins/hermes-redteam
+bash ~/src/hermes-redteam/scripts/install.sh
 ```
 
-然后在 app 里 ⌘K → **Reload desktop plugins**，再去 Settings → Plugins 打开「红队面板」。
+桌面半边在开发态由 app 从 checkout 热同步；如果没出现，删掉 `~/.hermes/desktop-plugins/hermes-redteam/.hermes-package.json`（让 app 把它当独立插件加载），再 Reload。
 
-面板是 `defaultEnabled: false`，每台默认关闭，需要手动开一次。
-目录名必须等于 `hermes-redteam`。
+## 使用
 
-远程客户端同理：面板走 `ctx.rest` 打**当前连接的网关**，所以网关那侧必须装好插件本体并 enable。
+1. 在 Sekhmet（default）会话里说：**靶标单位名 + 范围**。指挥会调用 `redteam_preflight`。
+2. 指挥开靶标：`redteam_engagement_open`，让你补 `wiki/authorization.md`（授权方/范围/时间窗/允许手段/联系人）。
+3. 指挥按阶段派工：`redteam_dispatch(role=recon|asset|vuln|exploit|internal, task=...)`。
+4. `redteam_dispatch_status(task_id)` 跟进；卡片完成后读库核对成果。
+5. 右侧面板实时显示：当前得分、五阶段、资产/漏洞/凭据/隧道、worker 角色、报告索引、技能可用性。
 
-### 3. 得分开关
+## 安全边界
 
-默认 `off`。面板里切换会写 `config.yaml` 的 `plugins.entries.hermes-redteam.score_rules`，新会话生效。
+- 没有 `authorization.md` 或关键字段为空，`redteam_dispatch` 拒绝派工。
+- 派工卡片带靶标目录与范围，worker 只测卡片内的目标。
+- 凭据只存指针/来源，命令正文与 payload 不入库。
+- 演练事实不进记忆、不进共享 Wiki；整个靶标目录可直接删除。
 
-## 测试
+## 开发
 
 ```bash
-python3 -m pytest tests -q
+env -u PYTHONPATH /usr/bin/python3 -m pytest tests -q
+hermes plugins doctor hermes-redteam
+node --input-type=module --check < desktop/plugin.js
 ```
 
-## 边界
-
-- 只服务已授权演练。开靶标先写 `wiki/authorization.md`，授权为空则预检返回 `blocked`。
-- 不落凭据真值、命令文本、PoC 正文。
-- 报告索引只含相对路径。
+当前状态：M1 注册/派工、M2 中文面板、M3 技能移植、M4 数据模型补全均已完成；端到端已在本机 `127.0.0.1:8765` 验证（指挥开靶标 → 派 `rt-recon` → curl 取标题 → 资产落库 → 面板计数 1）。
