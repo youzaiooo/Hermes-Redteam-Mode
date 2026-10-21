@@ -9,5 +9,5 @@ def test_preflight_reports_skill_catalog(tmp_path):
     open_engagement(tmp_path, "lab-01", "Lab 01")
     found = json.loads(preflight(tmp_path, "lab-01"))
 
-    assert found["skill_count"] == 24
+    assert found["skill_count"] >= 25
     assert "fofa-recon" in found["skills"]

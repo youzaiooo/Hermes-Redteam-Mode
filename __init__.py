@@ -112,6 +112,7 @@ _ROLE_SKILLS = {
     "rt-recon": (
         "fofa-recon",
         "passive-recon",
+        "deepseek-web-intel",
         "recon-pipeline",
         "active-scan",
         "web-fingerprint",
@@ -120,13 +121,14 @@ _ROLE_SKILLS = {
         "kimi-webbridge",
         "cn-proxy-pool",
     ),
-    "rt-asset": ("asset-correlation",),
-    "rt-vuln": ("nuclei-scan", "dir-bruteforce", "unauth-exploit"),
+    "rt-asset": ("asset-correlation", "score-coverage"),
+    "rt-vuln": ("nuclei-scan", "dir-bruteforce", "unauth-exploit", "cn-proxy-pool"),
     "rt-exploit": (
         "webshell-toolkit",
         "credential-attack",
         "shell-handler",
         "vps-reverse-shell",
+        "score-coverage",
     ),
     "rt-internal": (
         "gogo-intranet",
@@ -200,3 +202,7 @@ def register(ctx) -> None:
         role = root / "roles" / f"{profile}.md"
         if role.is_file():
             ctx.register_skill(profile, role)
+    else:
+        ctx.register_skill(
+            "redteam-commander", root / "skills" / "redteam-commander" / "SKILL.md"
+        )

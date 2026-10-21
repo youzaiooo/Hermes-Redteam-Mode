@@ -58,6 +58,12 @@ def _root() -> Path:
     return _home() / "redteam" / "engagements"
 
 
+def _db(path: Path) -> sqlite3.Connection:
+    db = sqlite3.connect(path)
+    _store.migrate_db(db)
+    return db
+
+
 def _list_ids() -> list[str]:
     root = _root()
     if not root.is_dir():
@@ -74,7 +80,7 @@ def _engagement_meta(root: Path, engagement_id: str) -> dict | None:
     db_path = root / engagement_id / "index.db"
     if not db_path.is_file():
         return None
-    with sqlite3.connect(db_path) as db:
+    with _db(db_path) as db:
         row = db.execute(
             "SELECT display_name, created_at FROM engagement WHERE id = ?",
             (engagement_id,),
@@ -128,7 +134,7 @@ def summary(engagement_id: str) -> dict:
     db_path = root / engagement_id / "index.db"
     if not db_path.is_file():
         raise HTTPException(status_code=404, detail="not_found")
-    with sqlite3.connect(db_path) as db:
+    with _db(db_path) as db:
         assets = db.execute(
             "SELECT COUNT(*) FROM asset WHERE engagement_id = ?", (engagement_id,)
         ).fetchone()[0]

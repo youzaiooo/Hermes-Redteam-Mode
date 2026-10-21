@@ -15,8 +15,11 @@ def test_chain_list_returns_paths_and_results(tmp_path: Path):
 
     assert found["ok"] is True
     assert found["count"] == 1
-    assert found["steps"][0] == {
-        "asset_key": "range-web",
-        "command_path": "raw/chain/range-web.txt",
-        "result": "confirmed",
-    }
+    step = found["steps"][0]
+    assert step["asset_key"] == "range-web"
+    assert step["command_path"] == "raw/chain/range-web.txt"
+    assert step["result"] == "confirmed"
+    assert step["stage_code"] == ""
+    assert step["tool"] == ""
+    assert step["summary"] == ""
+    assert step["created_at"]

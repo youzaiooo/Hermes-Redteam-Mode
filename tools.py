@@ -134,10 +134,22 @@ def asset_add(args: dict, **kwargs) -> str:
         return add_asset(
             _root(),
             args.get("id", ""),
-            args.get("stable_key", ""),
+            args.get("stable_key", "") or "",
             args.get("address", ""),
             args.get("status", "new"),
             args.get("extra"),
+            port=args.get("port"),
+            service=args.get("service"),
+            product=args.get("product"),
+            version=args.get("version"),
+            url=args.get("url"),
+            title=args.get("title"),
+            names=args.get("names"),
+            provenance=args.get("provenance"),
+            tool=args.get("tool"),
+            scope=args.get("scope"),
+            test_status=args.get("test_status"),
+            test_notes=args.get("test_notes"),
         )
     except Exception as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
@@ -145,7 +157,18 @@ def asset_add(args: dict, **kwargs) -> str:
 
 def asset_query(args: dict, **kwargs) -> str:
     del kwargs
-    return _call(query_assets, args, ("id", "stable_key"))
+    assessed = args.get("assessed")
+    if isinstance(assessed, str):
+        assessed = assessed.strip().lower() not in ("", "false", "0", "no", "none")
+    elif assessed is not None:
+        assessed = bool(assessed)
+    return query_assets(
+        _root(),
+        args.get("id", ""),
+        args.get("stable_key", "") or "",
+        args.get("status", "") or "",
+        assessed,
+    )
 
 
 def preflight_tool(args: dict, **kwargs) -> str:
@@ -197,6 +220,14 @@ def vuln_tool(args: dict, **kwargs) -> str:
             args.get("asset_key", ""),
             args.get("status", ""),
             args.get("evidence_path", ""),
+            title=args.get("title"),
+            severity=args.get("severity"),
+            cve=args.get("cve"),
+            target=args.get("target"),
+            evidence=args.get("evidence"),
+            confidence=args.get("confidence"),
+            gained=args.get("gained"),
+            agent=args.get("agent"),
         )
     except Exception as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
@@ -350,6 +381,9 @@ def chain_tool(args: dict, **kwargs) -> str:
             args.get("command_path", ""),
             args.get("result", ""),
             args.get("extra"),
+            stage_code=args.get("stage_code"),
+            tool=args.get("tool"),
+            summary=args.get("summary"),
         )
     except Exception as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
@@ -804,8 +838,20 @@ TOOLS = [
                 "stable_key": {"type": "string"},
                 "address": {"type": "string"},
                 "status": {"type": "string"},
+                "port": {"type": "integer"},
+                "service": {"type": "string"},
+                "product": {"type": "string"},
+                "version": {"type": "string"},
+                "url": {"type": "string"},
+                "title": {"type": "string"},
+                "names": {"type": "string"},
+                "provenance": {"type": "string"},
+                "tool": {"type": "string"},
+                "scope": {"type": "string"},
+                "test_status": {"type": "string"},
+                "test_notes": {"type": "string"},
             },
-            ["id", "stable_key", "address"],
+            ["id", "address"],
         ),
         asset_add,
     ),
@@ -814,7 +860,12 @@ TOOLS = [
         _schema(
             "redteam_asset_query",
             "Query asset pointers for one engagement.",
-            {"id": _ID, "stable_key": {"type": "string"}},
+            {
+                "id": _ID,
+                "stable_key": {"type": "string"},
+                "status": {"type": "string"},
+                "assessed": {"type": "boolean"},
+            },
             ["id"],
         ),
         asset_query,
@@ -899,6 +950,14 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "status": {"type": "string"},
                 "evidence_path": {"type": "string"},
+                "title": {"type": "string"},
+                "severity": {"type": "string"},
+                "cve": {"type": "string"},
+                "target": {"type": "string"},
+                "evidence": {"type": "string"},
+                "confidence": {"type": "string"},
+                "gained": {"type": "string"},
+                "agent": {"type": "string"},
             },
             ["id", "asset_key", "status", "evidence_path"],
         ),
@@ -1067,6 +1126,9 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "command_path": {"type": "string"},
                 "result": {"type": "string"},
+                "stage_code": {"type": "string"},
+                "tool": {"type": "string"},
+                "summary": {"type": "string"},
             },
             ["id", "asset_key", "command_path", "result"],
         ),

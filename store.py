@@ -20,9 +20,21 @@ CREATE TABLE IF NOT EXISTS engagement (
 CREATE TABLE IF NOT EXISTS asset (
     id INTEGER PRIMARY KEY,
     engagement_id TEXT NOT NULL REFERENCES engagement(id),
-    stable_key TEXT NOT NULL,
+    stable_key TEXT,
     address TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'new',
+    port INTEGER DEFAULT 0,
+    service TEXT DEFAULT '',
+    product TEXT DEFAULT '',
+    version TEXT DEFAULT '',
+    url TEXT DEFAULT '',
+    title TEXT DEFAULT '',
+    names TEXT DEFAULT '',
+    provenance TEXT DEFAULT '',
+    tool TEXT DEFAULT '',
+    scope TEXT DEFAULT '',
+    test_status TEXT DEFAULT '',
+    test_notes TEXT DEFAULT '',
     first_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (engagement_id, stable_key)
@@ -42,7 +54,16 @@ CREATE TABLE IF NOT EXISTS vuln (
     engagement_id TEXT NOT NULL REFERENCES engagement(id),
     asset_key TEXT NOT NULL,
     status TEXT NOT NULL,
-    evidence_path TEXT NOT NULL
+    evidence_path TEXT NOT NULL,
+    title TEXT DEFAULT '',
+    severity TEXT DEFAULT '',
+    cve TEXT DEFAULT '',
+    target TEXT DEFAULT '',
+    evidence TEXT DEFAULT '',
+    confidence TEXT DEFAULT '',
+    gained TEXT DEFAULT '',
+    agent TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS http_evidence (
@@ -99,7 +120,11 @@ CREATE TABLE IF NOT EXISTS chain_step (
     engagement_id TEXT NOT NULL REFERENCES engagement(id),
     asset_key TEXT NOT NULL,
     command_path TEXT NOT NULL,
-    result TEXT NOT NULL
+    result TEXT NOT NULL,
+    stage_code TEXT DEFAULT '',
+    tool TEXT DEFAULT '',
+    summary TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS attack_file (
@@ -186,6 +211,94 @@ CREATE TABLE IF NOT EXISTS reservation (
 
 _AUTH_FIELDS = ("授权方", "范围", "时间窗", "允许手段", "联系人")
 
+_MIGRATION_COLUMNS: dict[str, dict[str, str]] = {
+    "asset": {
+        "port": "INTEGER DEFAULT 0",
+        "service": "TEXT DEFAULT ''",
+        "product": "TEXT DEFAULT ''",
+        "version": "TEXT DEFAULT ''",
+        "url": "TEXT DEFAULT ''",
+        "title": "TEXT DEFAULT ''",
+        "names": "TEXT DEFAULT ''",
+        "provenance": "TEXT DEFAULT ''",
+        "tool": "TEXT DEFAULT ''",
+        "scope": "TEXT DEFAULT ''",
+        "test_status": "TEXT DEFAULT ''",
+        "test_notes": "TEXT DEFAULT ''",
+    },
+    "vuln": {
+        "title": "TEXT DEFAULT ''",
+        "severity": "TEXT DEFAULT ''",
+        "cve": "TEXT DEFAULT ''",
+        "target": "TEXT DEFAULT ''",
+        "evidence": "TEXT DEFAULT ''",
+        "confidence": "TEXT DEFAULT ''",
+        "gained": "TEXT DEFAULT ''",
+        "agent": "TEXT DEFAULT ''",
+        "created_at": "TEXT DEFAULT ''",
+    },
+    "chain_step": {
+        "stage_code": "TEXT DEFAULT ''",
+        "tool": "TEXT DEFAULT ''",
+        "summary": "TEXT DEFAULT ''",
+        "created_at": "TEXT DEFAULT ''",
+    },
+}
+
+
+def migrate_db(db: sqlite3.Connection) -> None:
+    """Upgrade an older index.db in place using PRAGMA table_info + ALTER TABLE."""
+    present = {
+        row[0]
+        for row in db.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    for table, columns in _MIGRATION_COLUMNS.items():
+        if table not in present:
+            continue
+        existing = {
+            row[1] for row in db.execute(f"PRAGMA table_info({table})")
+        }
+        for name, ddl in columns.items():
+            if name not in existing:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+    for table in ("vuln", "chain_step"):
+        if table not in present:
+            continue
+        db.execute(
+            f"UPDATE {table} SET created_at = CURRENT_TIMESTAMP "
+            "WHERE created_at IS NULL OR created_at = ''"
+        )
+    db.commit()
+
+
+def _connect(path: Path | str) -> sqlite3.Connection:
+    db = sqlite3.connect(path)
+    migrate_db(db)
+    return db
+
+
+def _clean(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _parse_port(value: object) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid_port") from exc
+    if port < 0:
+        raise ValueError("invalid_port")
+    return port
+
+
+def _derive_stable_key(address: str, port: int = 0) -> str:
+    address = _clean(address)
+    if port:
+        return f"{address}:{port}"
+    return address
+
 
 def open_engagement(root: Path, engagement_id: str, display_name: str) -> str:
     if not _ID_RE.match(engagement_id):
@@ -212,7 +325,7 @@ def open_engagement(root: Path, engagement_id: str, display_name: str) -> str:
     _write_once(wiki / "log.md", "# 动作记录\n\n")
 
     db_path = base / "index.db"
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         db.executescript(_SCHEMA)
         db.execute(
             "INSERT OR IGNORE INTO engagement (id, display_name) VALUES (?, ?)",
@@ -258,7 +371,7 @@ def query_board(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         assets = db.execute("SELECT COUNT(*) FROM asset").fetchone()[0]
         findings = db.execute("SELECT COUNT(*) FROM finding").fetchone()[0]
     return json.dumps(
@@ -277,14 +390,35 @@ def query_board(root: Path, engagement_id: str) -> str:
 def add_asset(
     root: Path,
     engagement_id: str,
-    stable_key: str,
-    address: str,
+    stable_key: str = "",
+    address: str = "",
     status: str = "new",
     extra: dict | None = None,
+    port: int | None = None,
+    service: str | None = None,
+    product: str | None = None,
+    version: str | None = None,
+    url: str | None = None,
+    title: str | None = None,
+    names: str | None = None,
+    provenance: str | None = None,
+    tool: str | None = None,
+    scope: str | None = None,
+    test_status: str | None = None,
+    test_notes: str | None = None,
 ) -> str:
     if extra and _SECRET_FIELDS.intersection(extra):
         return json.dumps({"ok": False, "error": "secret_field"}, ensure_ascii=False)
-    if not _ID_RE.match(engagement_id) or not stable_key.strip() or not address.strip():
+    address = _clean(address)
+    if not _ID_RE.match(engagement_id) or not address:
+        return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
+    if port is not None:
+        try:
+            port = _parse_port(port)
+        except ValueError:
+            return json.dumps({"ok": False, "error": "invalid_port"}, ensure_ascii=False)
+    key = _clean(stable_key) or _derive_stable_key(address, port or 0)
+    if not key:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
@@ -292,51 +426,117 @@ def add_asset(
     if not _has_reservation(db_path, engagement_id):
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
 
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         existing = db.execute(
             "SELECT id FROM asset WHERE engagement_id = ? AND stable_key = ?",
-            (engagement_id, stable_key),
+            (engagement_id, key),
         ).fetchone()
         if existing:
+            sets = ["address = ?", "status = ?", "last_seen = CURRENT_TIMESTAMP"]
+            values: list[object] = [address, _clean(status)]
+            for column, value in (
+                ("port", port),
+                ("service", service),
+                ("product", product),
+                ("version", version),
+                ("url", url),
+                ("title", title),
+                ("names", names),
+                ("provenance", provenance),
+                ("tool", tool),
+                ("scope", scope),
+                ("test_status", test_status),
+                ("test_notes", test_notes),
+            ):
+                if value is not None:
+                    sets.append(f"{column} = ?")
+                    values.append(_clean(value))
+            values.extend((engagement_id, key))
             db.execute(
-                "UPDATE asset SET address = ?, status = ?, last_seen = CURRENT_TIMESTAMP "
-                "WHERE engagement_id = ? AND stable_key = ?",
-                (address, status, engagement_id, stable_key),
+                "UPDATE asset SET " + ", ".join(sets)
+                + " WHERE engagement_id = ? AND stable_key = ?",
+                values,
             )
             updated = True
         else:
             db.execute(
-                "INSERT INTO asset (engagement_id, stable_key, address, status) VALUES (?, ?, ?, ?)",
-                (engagement_id, stable_key, address, status),
+                "INSERT INTO asset (engagement_id, stable_key, address, status, port, "
+                "service, product, version, url, title, names, provenance, tool, scope, "
+                "test_status, test_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    engagement_id,
+                    key,
+                    address,
+                    _clean(status),
+                    port or 0,
+                    _clean(service),
+                    _clean(product),
+                    _clean(version),
+                    _clean(url),
+                    _clean(title),
+                    _clean(names),
+                    _clean(provenance),
+                    _clean(tool),
+                    _clean(scope),
+                    _clean(test_status),
+                    _clean(test_notes),
+                ),
             )
             updated = False
     return json.dumps(
-        {"ok": True, "stable_key": stable_key, "updated": updated},
+        {"ok": True, "stable_key": key, "updated": updated},
         ensure_ascii=False,
     )
 
 
-def query_assets(root: Path, engagement_id: str, stable_key: str = "") -> str:
+def query_assets(
+    root: Path,
+    engagement_id: str,
+    stable_key: str = "",
+    status: str = "",
+    assessed: bool | None = None,
+) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
     sql = (
-        "SELECT stable_key, address, status, first_seen, last_seen "
+        "SELECT stable_key, address, port, status, service, product, version, url, "
+        "title, names, provenance, tool, scope, test_status, test_notes, "
+        "first_seen, last_seen "
         "FROM asset WHERE engagement_id = ?"
     )
-    params: list[str] = [engagement_id]
+    params: list[object] = [engagement_id]
     if stable_key:
         sql += " AND stable_key = ?"
         params.append(stable_key)
-    with sqlite3.connect(db_path) as db:
+    if status:
+        sql += " AND status = ?"
+        params.append(status)
+    if assessed is True:
+        sql += " AND test_status <> ''"
+    elif assessed is False:
+        sql += " AND test_status = ''"
+    with _connect(db_path) as db:
         rows = db.execute(sql, params).fetchall()
     assets = [
         {
             "stable_key": row[0],
             "address": row[1],
-            "status": row[2],
-            "first_seen": row[3],
-            "last_seen": row[4],
+            "port": row[2],
+            "status": row[3],
+            "service": row[4],
+            "product": row[5],
+            "version": row[6],
+            "url": row[7],
+            "title": row[8],
+            "names": row[9],
+            "provenance": row[10],
+            "tool": row[11],
+            "scope": row[12],
+            "test_status": row[13],
+            "test_notes": row[14],
+            "first_seen": row[15],
+            "last_seen": row[16],
         }
         for row in rows
     ]
@@ -359,7 +559,7 @@ def asset_stats(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         assets = db.execute(
             "SELECT COUNT(*) FROM asset WHERE engagement_id = ?",
             (engagement_id,),
@@ -372,25 +572,40 @@ def asset_stats(root: Path, engagement_id: str) -> str:
 
 
 def asset_test(root: Path, engagement_id: str, stable_key: str, note: str) -> str:
-    if not _has_reservation(Path(root) / engagement_id / "index.db", engagement_id):
+    db_path = Path(root) / engagement_id / "index.db"
+    if not db_path.is_file():
+        return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+    if not _has_reservation(db_path, engagement_id):
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     line = " ".join(note.split())
     if not line or len(line) > 80:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(db_path) as db:
         row = db.execute(
-            "SELECT status FROM asset WHERE engagement_id = ? AND stable_key = ?",
+            "SELECT status, test_notes FROM asset "
+            "WHERE engagement_id = ? AND stable_key = ?",
             (engagement_id, stable_key),
         ).fetchone()
         if not row:
             return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
         status = f"{row[0]}; {line}"
+        test_notes = f"{row[1]}\n{line}".strip() if row[1] else line
         db.execute(
-            "UPDATE asset SET status = ?, last_seen = CURRENT_TIMESTAMP "
+            "UPDATE asset SET status = ?, test_status = ?, test_notes = ?, "
+            "last_seen = CURRENT_TIMESTAMP "
             "WHERE engagement_id = ? AND stable_key = ?",
-            (status, engagement_id, stable_key),
+            (status, line, test_notes, engagement_id, stable_key),
         )
-    return json.dumps({"ok": True, "stable_key": stable_key, "status": status}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "ok": True,
+            "stable_key": stable_key,
+            "status": status,
+            "test_status": line,
+            "test_notes": test_notes,
+        },
+        ensure_ascii=False,
+    )
 
 
 def asset_assess(root: Path, engagement_id: str, stable_key: str, priority: str) -> str:
@@ -403,7 +618,7 @@ def reserve_write(root: Path, engagement_id: str, role: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         db.execute("BEGIN IMMEDIATE")
         count = db.execute(
             "SELECT COUNT(*) FROM reservation WHERE engagement_id = ? AND released_at IS NULL",
@@ -426,7 +641,7 @@ def release_write(root: Path, engagement_id: str, reservation_id: int) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         updated = db.execute(
             "UPDATE reservation SET released_at = CURRENT_TIMESTAMP "
             "WHERE id = ? AND engagement_id = ? AND released_at IS NULL",
@@ -441,7 +656,7 @@ def agent_slot(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         used = db.execute(
             "SELECT COUNT(*) FROM reservation WHERE engagement_id = ? AND released_at IS NULL",
             (engagement_id,),
@@ -453,7 +668,7 @@ def agent_slot(root: Path, engagement_id: str) -> str:
 
 
 def _has_reservation(db_path: Path, engagement_id: str) -> bool:
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         count = db.execute(
             "SELECT COUNT(*) FROM reservation WHERE engagement_id = ? AND released_at IS NULL",
             (engagement_id,),
@@ -483,7 +698,7 @@ def add_evidence(
     db_path = base / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         db.execute(
             "INSERT INTO evidence_ref (engagement_id, kind, relative_path, sha256, summary) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -501,15 +716,38 @@ def vuln_add(
     asset_key: str,
     status: str,
     evidence_path: str,
+    title: str | None = None,
+    severity: str | None = None,
+    cve: str | None = None,
+    target: str | None = None,
+    evidence: str | None = None,
+    confidence: str | None = None,
+    gained: str | None = None,
+    agent: str | None = None,
 ) -> str:
     if not _has_reservation(Path(root) / engagement_id / "index.db", engagement_id):
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if evidence_path.startswith("/") or ".." in Path(evidence_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
-            "INSERT INTO vuln (engagement_id, asset_key, status, evidence_path) VALUES (?, ?, ?, ?)",
-            (engagement_id, asset_key, status, evidence_path),
+            "INSERT INTO vuln (engagement_id, asset_key, status, evidence_path, "
+            "title, severity, cve, target, evidence, confidence, gained, agent) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                engagement_id,
+                _clean(asset_key),
+                _clean(status),
+                _clean(evidence_path),
+                _clean(title),
+                _clean(severity),
+                _clean(cve),
+                _clean(target),
+                _clean(evidence),
+                _clean(confidence),
+                _clean(gained),
+                _clean(agent),
+            ),
         )
     return json.dumps({"ok": True, "asset_key": asset_key}, ensure_ascii=False)
 
@@ -518,15 +756,32 @@ def vuln_query(root: Path, engagement_id: str, asset_key: str = "") -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    sql = "SELECT asset_key, status, evidence_path FROM vuln WHERE engagement_id = ?"
-    params: list[str] = [engagement_id]
+    sql = (
+        "SELECT asset_key, status, evidence_path, title, severity, cve, target, "
+        "evidence, confidence, gained, agent, created_at "
+        "FROM vuln WHERE engagement_id = ?"
+    )
+    params: list[object] = [engagement_id]
     if asset_key:
         sql += " AND asset_key = ?"
         params.append(asset_key)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(sql, params).fetchall()
     vulns = [
-        {"asset_key": row[0], "status": row[1], "evidence_path": row[2]}
+        {
+            "asset_key": row[0],
+            "status": row[1],
+            "evidence_path": row[2],
+            "title": row[3],
+            "severity": row[4],
+            "cve": row[5],
+            "target": row[6],
+            "evidence": row[7],
+            "confidence": row[8],
+            "gained": row[9],
+            "agent": row[10],
+            "created_at": row[11],
+        }
         for row in rows
     ]
     return json.dumps({"ok": True, "count": len(vulns), "vulns": vulns}, ensure_ascii=False)
@@ -537,7 +792,7 @@ def vuln_update(root: Path, engagement_id: str, asset_key: str, status: str) -> 
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not status.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         updated = db.execute(
             "UPDATE vuln SET status = ? WHERE engagement_id = ? AND asset_key = ?",
             (status, engagement_id, asset_key),
@@ -559,7 +814,7 @@ def http_evidence_add(
     for path in (request_path, response_path):
         if path.startswith("/") or ".." in Path(path).parts:
             return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO http_evidence "
             "(engagement_id, asset_key, request_path, response_path) VALUES (?, ?, ?, ?)",
@@ -583,7 +838,7 @@ def credential_add(
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if evidence_path.startswith("/") or ".." in Path(evidence_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO credential_ref (engagement_id, asset_key, evidence_path) VALUES (?, ?, ?)",
             (engagement_id, asset_key, evidence_path),
@@ -595,7 +850,7 @@ def credential_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, evidence_path FROM credential_ref WHERE engagement_id = ?",
             (engagement_id,),
@@ -621,7 +876,7 @@ def access_add(
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if evidence_path.startswith("/") or ".." in Path(evidence_path).parts or not method.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO access_session (engagement_id, asset_key, method, evidence_path) "
             "VALUES (?, ?, ?, ?)",
@@ -634,7 +889,7 @@ def access_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, method, evidence_path FROM access_session WHERE engagement_id = ?",
             (engagement_id,),
@@ -653,7 +908,7 @@ def sessions(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         access = db.execute("SELECT COUNT(*) FROM access_session").fetchone()[0]
         credentials = db.execute("SELECT COUNT(*) FROM credential_ref").fetchone()[0]
     return json.dumps(
@@ -668,7 +923,7 @@ def session_check(root: Path, engagement_id: str) -> str:
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
     if not _has_reservation(db_path, engagement_id):
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         webshells = db.execute(
             "UPDATE webshell SET status = 'checked' WHERE engagement_id = ?",
             (engagement_id,),
@@ -694,7 +949,7 @@ def tunnel_add(
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not entry_kind.strip() or evidence_path.startswith("/") or ".." in Path(evidence_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO tunnel (engagement_id, asset_key, entry_kind, evidence_path) "
             "VALUES (?, ?, ?, ?)",
@@ -708,7 +963,7 @@ def tunnel_update(root: Path, engagement_id: str, asset_key: str, status: str) -
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not status.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         changed = db.execute(
             "UPDATE tunnel SET status = ? WHERE engagement_id = ? AND asset_key = ?",
             (status, engagement_id, asset_key),
@@ -722,7 +977,7 @@ def tunnel_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, entry_kind, evidence_path FROM tunnel WHERE engagement_id = ?",
             (engagement_id,),
@@ -745,7 +1000,7 @@ def poc_add(
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not category.strip() or source_path.startswith("/") or ".." in Path(source_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO poc_ref (engagement_id, category, asset_key, source_path) "
             "VALUES (?, ?, ?, ?)",
@@ -758,7 +1013,7 @@ def poc_search(root: Path, engagement_id: str, category: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT category, asset_key, source_path FROM poc_ref "
             "WHERE engagement_id = ? AND category = ?",
@@ -775,7 +1030,7 @@ def poc_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT category, asset_key, source_path, status FROM poc_ref WHERE engagement_id = ?",
             (engagement_id,),
@@ -802,7 +1057,7 @@ def poc_update(root: Path, engagement_id: str, asset_key: str, status: str) -> s
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not status.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         changed = db.execute(
             "UPDATE poc_ref SET status = ? WHERE engagement_id = ? AND asset_key = ?",
             (status, engagement_id, asset_key),
@@ -841,7 +1096,7 @@ def asset_link(
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not source_key.strip() or not target_key.strip() or not relation.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO asset_link (engagement_id, source_key, target_key, relation) "
             "VALUES (?, ?, ?, ?)",
@@ -854,7 +1109,7 @@ def asset_graph(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT source_key, target_key, relation FROM asset_link WHERE engagement_id = ?",
             (engagement_id,),
@@ -874,7 +1129,7 @@ def web_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT stable_key, address, status FROM asset "
             "WHERE engagement_id = ? AND address LIKE 'http%'",
@@ -891,7 +1146,7 @@ def domain_index(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT address FROM asset WHERE engagement_id = ?",
             (engagement_id,),
@@ -910,7 +1165,7 @@ def asset_timeline(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT substr(first_seen, 1, 10), stable_key FROM asset "
             "WHERE engagement_id = ? ORDER BY first_seen",
@@ -930,6 +1185,9 @@ def chain_add(
     command_path: str,
     result: str,
     extra: dict | None = None,
+    stage_code: str | None = None,
+    tool: str | None = None,
+    summary: str | None = None,
 ) -> str:
     if extra and _SECRET_FIELDS.intersection(extra):
         return json.dumps({"ok": False, "error": "secret_field"}, ensure_ascii=False)
@@ -937,11 +1195,19 @@ def chain_add(
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if command_path.startswith("/") or ".." in Path(command_path).parts or not result.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
-            "INSERT INTO chain_step (engagement_id, asset_key, command_path, result) "
-            "VALUES (?, ?, ?, ?)",
-            (engagement_id, asset_key, command_path, " ".join(result.split())),
+            "INSERT INTO chain_step (engagement_id, asset_key, command_path, result, "
+            "stage_code, tool, summary) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                engagement_id,
+                asset_key,
+                command_path,
+                " ".join(result.split()),
+                _clean(stage_code),
+                _clean(tool),
+                _clean(summary),
+            ),
         )
     return json.dumps({"ok": True, "asset_key": asset_key}, ensure_ascii=False)
 
@@ -950,13 +1216,22 @@ def chain_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
-            "SELECT asset_key, command_path, result FROM chain_step WHERE engagement_id = ?",
+            "SELECT asset_key, command_path, result, stage_code, tool, summary, created_at "
+            "FROM chain_step WHERE engagement_id = ?",
             (engagement_id,),
         ).fetchall()
     steps = [
-        {"asset_key": row[0], "command_path": row[1], "result": row[2]}
+        {
+            "asset_key": row[0],
+            "command_path": row[1],
+            "result": row[2],
+            "stage_code": row[3],
+            "tool": row[4],
+            "summary": row[5],
+            "created_at": row[6],
+        }
         for row in rows
     ]
     return json.dumps({"ok": True, "count": len(steps), "steps": steps}, ensure_ascii=False)
@@ -970,7 +1245,7 @@ def attack_chain(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         counts = {
             "recon": db.execute("SELECT COUNT(*) FROM asset").fetchone()[0],
             "vuln": db.execute("SELECT COUNT(*) FROM vuln").fetchone()[0],
@@ -992,7 +1267,7 @@ def attack_file_add(
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if relative_path.startswith("/") or ".." in Path(relative_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO attack_file (engagement_id, asset_key, relative_path) VALUES (?, ?, ?)",
             (engagement_id, asset_key, relative_path),
@@ -1004,7 +1279,7 @@ def attack_file_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, relative_path FROM attack_file WHERE engagement_id = ?",
             (engagement_id,),
@@ -1026,7 +1301,7 @@ def webshell_add(
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
     if evidence_path.startswith("/") or ".." in Path(evidence_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO webshell (engagement_id, asset_key, shell_type, evidence_path) "
             "VALUES (?, ?, ?, ?)",
@@ -1040,7 +1315,7 @@ def webshell_update(root: Path, engagement_id: str, asset_key: str, status: str)
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not status.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         changed = db.execute(
             "UPDATE webshell SET status = ? WHERE engagement_id = ? AND asset_key = ?",
             (status, engagement_id, asset_key),
@@ -1054,7 +1329,7 @@ def webshell_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, shell_type, evidence_path, status FROM webshell "
             "WHERE engagement_id = ?",
@@ -1088,7 +1363,7 @@ def add_finding(
     if len(line) > 120 or evidence_path.startswith("/") or ".." in Path(evidence_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
     db_path = Path(root) / engagement_id / "index.db"
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         db.execute(
             "INSERT INTO finding (engagement_id, asset_key, conclusion, evidence_path) "
             "VALUES (?, ?, ?, ?)",
@@ -1111,7 +1386,7 @@ def add_chain(
     line = " ".join(conclusion.split())
     if len(line) > 120 or not evidence_ids:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO attack_chain (engagement_id, conclusion, evidence_ids) VALUES (?, ?, ?)",
             (engagement_id, line, json.dumps(evidence_ids)),
@@ -1135,7 +1410,7 @@ def score_hit(root: Path, engagement_id: str, rule_id: str, evidence_path: str) 
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not rule_id.strip() or evidence_path.startswith("/") or ".." in Path(evidence_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO score_event (engagement_id, rule_id, evidence_path) VALUES (?, ?, ?)",
             (engagement_id, rule_id, evidence_path),
@@ -1151,7 +1426,7 @@ def shot_add(root: Path, engagement_id: str, asset_key: str, relative_path: str)
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if relative_path.startswith("/") or ".." in Path(relative_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO shot (engagement_id, asset_key, relative_path) VALUES (?, ?, ?)",
             (engagement_id, asset_key, relative_path),
@@ -1163,7 +1438,7 @@ def shot_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, relative_path FROM shot WHERE engagement_id = ?",
             (engagement_id,),
@@ -1175,7 +1450,7 @@ def shot_list(root: Path, engagement_id: str) -> str:
 def shot_delete(root: Path, engagement_id: str, relative_path: str) -> str:
     if not _has_reservation(Path(root) / engagement_id / "index.db", engagement_id):
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         changed = db.execute(
             "DELETE FROM shot WHERE engagement_id = ? AND relative_path = ?",
             (engagement_id, relative_path),
@@ -1190,7 +1465,7 @@ def score_point_save(root: Path, engagement_id: str, point_id: str, category: st
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not point_id.strip() or not category.strip():
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO score_point (engagement_id, point_id, category) VALUES (?, ?, ?)",
             (engagement_id, point_id, category),
@@ -1205,7 +1480,7 @@ def score_point_get(root: Path, engagement_id: str, point_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         row = db.execute(
             "SELECT category FROM score_point WHERE engagement_id = ? AND point_id = ?",
             (engagement_id, point_id),
@@ -1220,7 +1495,7 @@ def scan_add(root: Path, engagement_id: str, asset_key: str, relative_path: str)
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if relative_path.startswith("/") or ".." in Path(relative_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO scan_ref (engagement_id, asset_key, relative_path) VALUES (?, ?, ?)",
             (engagement_id, asset_key, relative_path),
@@ -1232,7 +1507,7 @@ def scan_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, relative_path FROM scan_ref WHERE engagement_id = ?",
             (engagement_id,),
@@ -1246,7 +1521,7 @@ def note_add(root: Path, engagement_id: str, asset_key: str, relative_path: str)
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if relative_path.startswith("/") or ".." in Path(relative_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO note_ref (engagement_id, asset_key, relative_path) VALUES (?, ?, ?)",
             (engagement_id, asset_key, relative_path),
@@ -1258,7 +1533,7 @@ def note_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, relative_path FROM note_ref WHERE engagement_id = ?",
             (engagement_id,),
@@ -1272,7 +1547,7 @@ def knowledge_add(root: Path, engagement_id: str, asset_key: str, relative_path:
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if relative_path.startswith("/") or ".." in Path(relative_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with sqlite3.connect(Path(root) / engagement_id / "index.db") as db:
+    with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
             "INSERT INTO knowledge_ref (engagement_id, asset_key, relative_path) VALUES (?, ?, ?)",
             (engagement_id, asset_key, relative_path),
@@ -1284,7 +1559,7 @@ def knowledge_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT asset_key, relative_path FROM knowledge_ref WHERE engagement_id = ?",
             (engagement_id,),
@@ -1344,7 +1619,7 @@ def write_report_index(root: Path, engagement_id: str) -> str:
 
 def write_score_report(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
-    with sqlite3.connect(db_path) as db:
+    with _connect(db_path) as db:
         rows = db.execute(
             "SELECT rule_id, evidence_path FROM score_event WHERE engagement_id = ?",
             (engagement_id,),

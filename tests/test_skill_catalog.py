@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_skill_catalog_matches_dsh_names():
+def test_skill_catalog_matches_ported_names():
     names = sorted(path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md"))
     assert names == [
         "active-scan",
@@ -12,6 +12,7 @@ def test_skill_catalog_matches_dsh_names():
         "chisel-tunnel",
         "cn-proxy-pool",
         "credential-attack",
+        "deepseek-web-intel",
         "dir-bruteforce",
         "fofa-recon",
         "frp-tunnel",
@@ -22,8 +23,10 @@ def test_skill_catalog_matches_dsh_names():
         "nuclei-scan",
         "passive-recon",
         "recon-pipeline",
+        "redteam-commander",
         "redteam-preflight",
         "redteam-setup",
+        "score-coverage",
         "shell-handler",
         "suo5-tunnel",
         "unauth-exploit",

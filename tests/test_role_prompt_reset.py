@@ -15,4 +15,4 @@ def test_role_prompt_reset_restores_file(tmp_path: Path):
     found = json.loads(role_prompt_reset(tmp_path, "rt-recon", source))
 
     assert found["ok"] is True
-    assert "只写资产指针" in (role_dir / "rt-recon.md").read_text(encoding="utf-8")
+    assert "信息收集执行角色" in (role_dir / "rt-recon.md").read_text(encoding="utf-8")

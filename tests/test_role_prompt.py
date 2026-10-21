@@ -11,4 +11,4 @@ def test_role_prompt_reads_existing_role_file():
 
     assert found["ok"] is True
     assert found["role"] == "rt-recon"
-    assert "只写资产指针" in found["text"]
+    assert "信息收集执行角色" in found["text"]
