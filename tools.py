@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
+from .dispatch import dispatch, dispatch_status
 from .preflight import preflight
 from .score import score_list
 from .store import (
@@ -78,14 +80,21 @@ from .store import (
 
 
 def _root() -> Path:
-    import os
+    try:
+        from hermes_constants import get_hermes_home
 
-    home = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
+        home = get_hermes_home()
+    except Exception:
+        home = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
     return Path(home) / "redteam" / "engagements"
 
 
-def _session_gate(args: dict) -> str:
-    session_id = str(args.get("session_id", "")).strip()
+def _session_id(args: dict, kwargs: dict | None = None) -> str:
+    return str((kwargs or {}).get("session_id") or args.get("session_id") or "").strip()
+
+
+def _session_gate(args: dict, kwargs: dict | None = None) -> str:
+    session_id = _session_id(args, kwargs)
     if not session_id:
         return json.dumps({"ok": False, "error": "session_unbound"}, ensure_ascii=False)
     state_path = _root() / args.get("id", "") / "session.json"
@@ -110,14 +119,16 @@ def engagement_open(args: dict, **kwargs) -> str:
 
 
 def session_bind(args: dict, **kwargs) -> str:
-    del kwargs
-    return _call(bind_session, args, ("id", "session_id", "profile"))
+    merged = dict(args)
+    session_id = kwargs.get("session_id") or args.get("session_id")
+    if session_id:
+        merged["session_id"] = session_id
+    return _call(bind_session, merged, ("id", "session_id", "profile"))
 
 
 def asset_add(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return add_asset(
@@ -176,9 +187,8 @@ def finding_add(args: dict, **kwargs) -> str:
 
 
 def vuln_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return vuln_add(
@@ -193,9 +203,8 @@ def vuln_tool(args: dict, **kwargs) -> str:
 
 
 def http_evidence_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return http_evidence_add(
@@ -210,9 +219,8 @@ def http_evidence_tool(args: dict, **kwargs) -> str:
 
 
 def access_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return access_add(
@@ -227,9 +235,8 @@ def access_tool(args: dict, **kwargs) -> str:
 
 
 def credential_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return credential_add(
@@ -244,9 +251,8 @@ def credential_tool(args: dict, **kwargs) -> str:
 
 
 def vuln_update_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return vuln_update(
@@ -265,9 +271,8 @@ def sessions_tool(args: dict, **kwargs) -> str:
 
 
 def tunnel_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return tunnel_add(
@@ -287,9 +292,8 @@ def tunnel_list_tool(args: dict, **kwargs) -> str:
 
 
 def poc_add_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return poc_add(
@@ -309,9 +313,8 @@ def poc_search_tool(args: dict, **kwargs) -> str:
 
 
 def asset_link_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return asset_link(
@@ -336,9 +339,8 @@ def web_list_tool(args: dict, **kwargs) -> str:
 
 
 def chain_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return chain_add(
@@ -354,9 +356,8 @@ def chain_tool(args: dict, **kwargs) -> str:
 
 
 def asset_assess_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return asset_assess(
@@ -380,9 +381,8 @@ def session_info_tool(args: dict, **kwargs) -> str:
 
 
 def attack_file_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return attack_file_add(
@@ -425,9 +425,8 @@ def access_list_tool(args: dict, **kwargs) -> str:
 
 
 def tunnel_update_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return tunnel_update(
@@ -456,9 +455,8 @@ def chain_list_tool(args: dict, **kwargs) -> str:
 
 
 def webshell_add_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return webshell_add(
@@ -473,9 +471,8 @@ def webshell_add_tool(args: dict, **kwargs) -> str:
 
 
 def webshell_update_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return webshell_update(
@@ -494,9 +491,8 @@ def webshell_list_tool(args: dict, **kwargs) -> str:
 
 
 def session_check_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return session_check(_root(), args.get("id", ""))
@@ -515,9 +511,8 @@ def asset_stats_tool(args: dict, **kwargs) -> str:
 
 
 def asset_test_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return asset_test(
@@ -536,9 +531,8 @@ def poc_get_tool(args: dict, **kwargs) -> str:
 
 
 def poc_update_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return poc_update(
@@ -552,9 +546,8 @@ def poc_update_tool(args: dict, **kwargs) -> str:
 
 
 def poc_use_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return poc_use(
@@ -602,9 +595,8 @@ def role_prompt_reset_tool(args: dict, **kwargs) -> str:
 
 
 def score_hit_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return score_hit(
@@ -618,9 +610,8 @@ def score_hit_tool(args: dict, **kwargs) -> str:
 
 
 def shot_add_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return shot_add(
@@ -639,9 +630,8 @@ def shot_list_tool(args: dict, **kwargs) -> str:
 
 
 def shot_delete_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return shot_delete(_root(), args.get("id", ""), args.get("relative_path", ""))
@@ -664,9 +654,8 @@ def score_report(args: dict, **kwargs) -> str:
 
 
 def score_point_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return score_point_save(
@@ -685,9 +674,8 @@ def score_point_get_tool(args: dict, **kwargs) -> str:
 
 
 def scan_add_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return scan_add(
@@ -706,9 +694,8 @@ def scan_list_tool(args: dict, **kwargs) -> str:
 
 
 def note_add_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return note_add(
@@ -727,9 +714,8 @@ def note_list_tool(args: dict, **kwargs) -> str:
 
 
 def knowledge_add_tool(args: dict, **kwargs) -> str:
-    del kwargs
     try:
-        gate = _session_gate(args)
+        gate = _session_gate(args, kwargs)
         if gate:
             return gate
         return knowledge_add(
@@ -754,6 +740,19 @@ def report_skeleton(args: dict, **kwargs) -> str:
         return json.dumps({"ok": True, "path": path}, ensure_ascii=False)
     except Exception as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
+
+
+def dispatch_tool(args: dict, **kwargs) -> str:
+    return dispatch(
+        args,
+        session_id=kwargs.get("session_id") or "",
+        task_id=kwargs.get("task_id") or "",
+        parent_agent=kwargs.get("parent_agent") or "",
+    )
+
+
+def dispatch_status_tool(args: dict, **kwargs) -> str:
+    return dispatch_status(args, **kwargs)
 
 
 def _schema(name: str, description: str, properties: dict, required: list[str]) -> dict:
@@ -791,7 +790,7 @@ TOOLS = [
                 "session_id": {"type": "string"},
                 "profile": {"type": "string"},
             },
-            ["id", "session_id", "profile"],
+            ["id", "profile"],
         ),
         session_bind,
     ),
@@ -900,9 +899,8 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "status": {"type": "string"},
                 "evidence_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "status", "evidence_path", "session_id"],
+            ["id", "asset_key", "status", "evidence_path"],
         ),
         vuln_tool,
     ),
@@ -916,9 +914,8 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "request_path": {"type": "string"},
                 "response_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "request_path", "response_path", "session_id"],
+            ["id", "asset_key", "request_path", "response_path"],
         ),
         http_evidence_tool,
     ),
@@ -932,9 +929,8 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "method": {"type": "string"},
                 "evidence_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "method", "evidence_path", "session_id"],
+            ["id", "asset_key", "method", "evidence_path"],
         ),
         access_tool,
     ),
@@ -947,9 +943,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "evidence_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "evidence_path", "session_id"],
+            ["id", "asset_key", "evidence_path"],
         ),
         credential_tool,
     ),
@@ -962,9 +957,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "status": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "status", "session_id"],
+            ["id", "asset_key", "status"],
         ),
         vuln_update_tool,
     ),
@@ -988,9 +982,8 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "entry_kind": {"type": "string"},
                 "evidence_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "entry_kind", "evidence_path", "session_id"],
+            ["id", "asset_key", "entry_kind", "evidence_path"],
         ),
         tunnel_tool,
     ),
@@ -1014,9 +1007,8 @@ TOOLS = [
                 "category": {"type": "string"},
                 "asset_key": {"type": "string"},
                 "source_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "category", "asset_key", "source_path", "session_id"],
+            ["id", "category", "asset_key", "source_path"],
         ),
         poc_add_tool,
     ),
@@ -1040,9 +1032,8 @@ TOOLS = [
                 "source_key": {"type": "string"},
                 "target_key": {"type": "string"},
                 "relation": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "source_key", "target_key", "relation", "session_id"],
+            ["id", "source_key", "target_key", "relation"],
         ),
         asset_link_tool,
     ),
@@ -1076,9 +1067,8 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "command_path": {"type": "string"},
                 "result": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "command_path", "result", "session_id"],
+            ["id", "asset_key", "command_path", "result"],
         ),
         chain_tool,
     ),
@@ -1091,9 +1081,8 @@ TOOLS = [
                 "id": _ID,
                 "stable_key": {"type": "string"},
                 "priority": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "stable_key", "priority", "session_id"],
+            ["id", "stable_key", "priority"],
         ),
         asset_assess_tool,
     ),
@@ -1126,9 +1115,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "relative_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "relative_path", "session_id"],
+            ["id", "asset_key", "relative_path"],
         ),
         attack_file_tool,
     ),
@@ -1191,9 +1179,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "status": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "status", "session_id"],
+            ["id", "asset_key", "status"],
         ),
         tunnel_update_tool,
     ),
@@ -1237,9 +1224,8 @@ TOOLS = [
                 "asset_key": {"type": "string"},
                 "shell_type": {"type": "string"},
                 "evidence_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "shell_type", "evidence_path", "session_id"],
+            ["id", "asset_key", "shell_type", "evidence_path"],
         ),
         webshell_add_tool,
     ),
@@ -1252,9 +1238,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "status": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "status", "session_id"],
+            ["id", "asset_key", "status"],
         ),
         webshell_update_tool,
     ),
@@ -1273,8 +1258,8 @@ TOOLS = [
         _schema(
             "redteam_session_check",
             "Mark recorded WebShell and tunnel pointers as checked.",
-            {"id": _ID, "session_id": {"type": "string"}},
-            ["id", "session_id"],
+            {"id": _ID},
+            ["id"],
         ),
         session_check_tool,
     ),
@@ -1307,9 +1292,8 @@ TOOLS = [
                 "id": _ID,
                 "stable_key": {"type": "string"},
                 "note": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "stable_key", "note", "session_id"],
+            ["id", "stable_key", "note"],
         ),
         asset_test_tool,
     ),
@@ -1332,9 +1316,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "status": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "status", "session_id"],
+            ["id", "asset_key", "status"],
         ),
         poc_update_tool,
     ),
@@ -1347,9 +1330,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "result": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "result", "session_id"],
+            ["id", "asset_key", "result"],
         ),
         poc_use_tool,
     ),
@@ -1422,9 +1404,8 @@ TOOLS = [
                 "id": _ID,
                 "rule_id": {"type": "string"},
                 "evidence_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "rule_id", "evidence_path", "session_id"],
+            ["id", "rule_id", "evidence_path"],
         ),
         score_hit_tool,
     ),
@@ -1437,9 +1418,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "relative_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "relative_path", "session_id"],
+            ["id", "asset_key", "relative_path"],
         ),
         shot_add_tool,
     ),
@@ -1461,9 +1441,8 @@ TOOLS = [
             {
                 "id": _ID,
                 "relative_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "relative_path", "session_id"],
+            ["id", "relative_path"],
         ),
         shot_delete_tool,
     ),
@@ -1496,9 +1475,8 @@ TOOLS = [
                 "id": _ID,
                 "point_id": {"type": "string"},
                 "category": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "point_id", "category", "session_id"],
+            ["id", "point_id", "category"],
         ),
         score_point_tool,
     ),
@@ -1524,9 +1502,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "relative_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "relative_path", "session_id"],
+            ["id", "asset_key", "relative_path"],
         ),
         scan_add_tool,
     ),
@@ -1549,9 +1526,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "relative_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "relative_path", "session_id"],
+            ["id", "asset_key", "relative_path"],
         ),
         note_add_tool,
     ),
@@ -1574,9 +1550,8 @@ TOOLS = [
                 "id": _ID,
                 "asset_key": {"type": "string"},
                 "relative_path": {"type": "string"},
-                "session_id": {"type": "string"},
             },
-            ["id", "asset_key", "relative_path", "session_id"],
+            ["id", "asset_key", "relative_path"],
         ),
         knowledge_add_tool,
     ),
@@ -1589,5 +1564,34 @@ TOOLS = [
             ["id"],
         ),
         knowledge_list_tool,
+    ),
+    (
+        "redteam_dispatch",
+        _schema(
+            "redteam_dispatch",
+            "Create a kanban card assigning a task to one execution profile.",
+            {
+                "role": {
+                    "type": "string",
+                    "enum": ["recon", "asset", "vuln", "exploit", "internal"],
+                },
+                "task": {"type": "string"},
+                "title": {"type": "string"},
+                "priority": {"type": "integer"},
+                "engagement_id": {"type": "string"},
+            },
+            ["role", "task"],
+        ),
+        dispatch_tool,
+    ),
+    (
+        "redteam_dispatch_status",
+        _schema(
+            "redteam_dispatch_status",
+            "Poll a dispatched kanban card for status, summary, and result.",
+            {"task_id": {"type": "string"}},
+            ["task_id"],
+        ),
+        dispatch_status_tool,
     ),
 ]

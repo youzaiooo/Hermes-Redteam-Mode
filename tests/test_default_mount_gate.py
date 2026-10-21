@@ -16,10 +16,13 @@ class _Ctx:
         self.skills.append(name)
 
 
-def test_default_profile_registers_no_execution_tools_or_skills():
+def test_default_profile_registers_commander_tools_and_setup_skills():
     ctx = _Ctx("default")
 
     register(ctx)
 
-    assert ctx.tools == []
-    assert ctx.skills == []
+    assert "redteam_dispatch" in ctx.tools
+    assert "redteam_asset_add" not in ctx.tools
+    assert "redteam-preflight" in ctx.skills
+    assert "redteam-setup" in ctx.skills
+    assert "rt-recon" not in ctx.skills

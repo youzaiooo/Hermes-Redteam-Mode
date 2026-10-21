@@ -13,12 +13,14 @@ class _Ctx:
         return None
 
 
-def test_default_registers_no_execution_tools():
+def test_default_registers_commander_tools():
     ctx = _Ctx("default")
 
     register(ctx)
 
-    assert ctx.tools == []
+    assert "redteam_dispatch" in ctx.tools
+    assert "redteam_dispatch_status" in ctx.tools
+    assert "redteam_engagement_open" in ctx.tools
     assert "redteam_asset_add" not in ctx.tools
 
 
@@ -27,6 +29,9 @@ def test_execution_profile_registers_write_tools():
 
     register(ctx)
 
-    assert "redteam_asset_add" in ctx.tools
+    assert "redteam_asset_assess" in ctx.tools
+    assert "redteam_asset_link" in ctx.tools
+    assert "redteam_asset_get" in ctx.tools
+    assert "redteam_asset_add" not in ctx.tools
     assert "redteam_finding_add" not in ctx.tools
     assert "redteam_score_record" not in ctx.tools

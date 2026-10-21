@@ -1,59 +1,83 @@
-"""hermes-redteam plugin registration. P0 tools only."""
+"""hermes-redteam plugin registration. Commander plus five role profiles."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+_COMMANDER_TOOLS = frozenset(
+    {
+        "redteam_engagement_open",
+        "redteam_session_bind",
+        "redteam_session_info",
+        "redteam_preflight",
+        "redteam_asset_query",
+        "redteam_asset_get",
+        "redteam_asset_stats",
+        "redteam_chain",
+        "redteam_chain_list",
+        "redteam_attack_chain",
+        "redteam_attack_path",
+        "redteam_score_list",
+        "redteam_score_report",
+        "redteam_report_index",
+        "redteam_sessions",
+        "redteam_agent_slot",
+        "redteam_dispatch",
+        "redteam_dispatch_status",
+    }
+)
 
-def register(ctx) -> None:
-    profile = str(getattr(ctx, "profile_name", "") or "")
-    if not profile.startswith("rt-"):
-        return
-    from .tools import TOOLS
+_SHARED_READS = frozenset(
+    {
+        "redteam_engagement_open",
+        "redteam_session_bind",
+        "redteam_session_info",
+        "redteam_preflight",
+        "redteam_asset_query",
+        "redteam_asset_get",
+        "redteam_asset_stats",
+    }
+)
 
-    allowed = {
-        "rt-recon": {
+_ROLE_TOOLS = {
+    "rt-recon": frozenset(
+        {
             "redteam_asset_add",
-            "redteam_asset_query",
-            "redteam_asset_get",
-            "redteam_asset_stats",
             "redteam_asset_test",
+            "redteam_asset_link",
+            "redteam_asset_graph",
             "redteam_evidence_add",
-            "redteam_domain_index",
             "redteam_scan_add",
             "redteam_scan_list",
             "redteam_note_add",
             "redteam_note_list",
-        },
-        "rt-asset": {
-            "redteam_asset_add",
-            "redteam_asset_query",
-            "redteam_asset_get",
-            "redteam_asset_stats",
-            "redteam_asset_test",
-            "redteam_asset_link",
-            "redteam_asset_graph",
+            "redteam_domain_index",
+        }
+    ),
+    "rt-asset": frozenset(
+        {
             "redteam_asset_assess",
+            "redteam_asset_link",
             "redteam_asset_timeline",
             "redteam_web_list",
-        },
-        "rt-vuln": {
+            "redteam_asset_get",
+        }
+    ),
+    "rt-vuln": frozenset(
+        {
             "redteam_finding_add",
-            "redteam_evidence_add",
             "redteam_vuln_add",
             "redteam_vuln_update",
             "redteam_http_evidence_add",
             "redteam_poc_add",
             "redteam_poc_search",
-            "redteam_poc_list",
-            "redteam_poc_get",
-            "redteam_poc_update",
             "redteam_poc_use",
             "redteam_knowledge_add",
             "redteam_knowledge_list",
-        },
-        "rt-exploit": {
-            "redteam_evidence_add",
+        }
+    ),
+    "rt-exploit": frozenset(
+        {
             "redteam_access_add",
             "redteam_access_list",
             "redteam_credential_add",
@@ -61,47 +85,103 @@ def register(ctx) -> None:
             "redteam_sessions",
             "redteam_chain_add",
             "redteam_chain_list",
-            "redteam_chain",
-            "redteam_attack_file_add",
-            "redteam_attack_file_list",
             "redteam_webshell_add",
             "redteam_webshell_update",
             "redteam_webshell_list",
-            "redteam_session_check",
+            "redteam_tunnel_add",
+            "redteam_tunnel_list",
             "redteam_shot_add",
             "redteam_shot_list",
             "redteam_shot_delete",
-        },
-        "rt-internal": {
+            "redteam_attack_file_add",
+            "redteam_attack_file_list",
+        }
+    ),
+    "rt-internal": frozenset(
+        {
             "redteam_evidence_add",
+            "redteam_asset_add",
             "redteam_tunnel_add",
-            "redteam_tunnel_list",
             "redteam_tunnel_update",
-        },
-    }[profile] if profile.startswith("rt-") else None
-    shared = {
-        "redteam_engagement_open",
-        "redteam_session_bind",
-        "redteam_session_info",
-        "redteam_preflight",
-        "redteam_reserve",
-        "redteam_release",
-        "redteam_report_skeleton",
-        "redteam_report_index",
-        "redteam_score_list",
-        "redteam_attack_chain",
-        "redteam_attack_path",
-        "redteam_roles",
-        "redteam_role_prompt",
-        "redteam_role_prompt_reset",
-        "redteam_score_hit",
-        "redteam_score_report",
-        "redteam_score_point_save",
-        "redteam_score_point_get",
-        "redteam_agent_slot",
-    }
+            "redteam_tunnel_list",
+        }
+    ),
+}
+
+_ROLE_SKILLS = {
+    "rt-recon": (
+        "fofa-recon",
+        "passive-recon",
+        "recon-pipeline",
+        "active-scan",
+        "web-fingerprint",
+        "asset-correlation",
+        "browser-automation",
+        "kimi-webbridge",
+        "cn-proxy-pool",
+    ),
+    "rt-asset": ("asset-correlation",),
+    "rt-vuln": ("nuclei-scan", "dir-bruteforce", "unauth-exploit"),
+    "rt-exploit": (
+        "webshell-toolkit",
+        "credential-attack",
+        "shell-handler",
+        "vps-reverse-shell",
+    ),
+    "rt-internal": (
+        "gogo-intranet",
+        "fscan-intranet",
+        "suo5-tunnel",
+        "chisel-tunnel",
+        "frp-tunnel",
+        "lateral-movement",
+    ),
+}
+
+
+def _profile_name(ctx=None) -> str:
+    """Identity of the profile this registration runs for.
+
+    Prefer an explicit ``ctx.profile_name`` when a host/test context provides one.
+    ``PluginContext`` has no such attribute on Hermes 0.22.2, so fall back to the
+    supported resolver ``hermes_cli.profiles.current_profile_name`` — it reads a
+    bound HERMES_HOME override first, then the ``HERMES_PROFILE_NAME`` /
+    ``HERMES_PROFILE`` pin a kanban worker inherits, then derives from HERMES_HOME
+    (``default``, ``rt-*``, or ``custom`` for ad-hoc homes such as plugin doctor).
+    """
+    explicit = str(getattr(ctx, "profile_name", "") or "").strip() if ctx is not None else ""
+    if explicit:
+        return explicit
+    try:
+        from hermes_cli.profiles import current_profile_name
+
+        name = (current_profile_name(default="default") or "default").strip()
+    except Exception:
+        name = "default"
+    return name or "default"
+
+
+def _allowed_for(profile: str) -> frozenset[str]:
+    if profile == "default":
+        return _COMMANDER_TOOLS
+    if profile.startswith("rt-"):
+        return _ROLE_TOOLS.get(profile, frozenset()) | _SHARED_READS
+    # Doctor and ad-hoc homes resolve as "custom". Treat them as commander homes:
+    # the surface is inspectable and a dispatch without a bound engagement fails
+    # closed in the handler.
+    return _COMMANDER_TOOLS
+
+
+def register(ctx) -> None:
+    profile = _profile_name(ctx)
+    from .tools import TOOLS
+
+    allowed = _allowed_for(profile)
+    if not allowed:
+        return
+
     for name, schema, handler in TOOLS:
-        if allowed is not None and name not in allowed and name not in shared:
+        if name not in allowed:
             continue
         ctx.register_tool(
             name=name,
@@ -109,39 +189,14 @@ def register(ctx) -> None:
             schema=schema,
             handler=handler,
         )
+
     root = Path(__file__).resolve().parent
-    role_skills = {
-        "rt-recon": (
-            "fofa-recon",
-            "passive-recon",
-            "recon-pipeline",
-            "active-scan",
-            "web-fingerprint",
-            "asset-correlation",
-            "browser-automation",
-            "kimi-webbridge",
-            "cn-proxy-pool",
-        ),
-        "rt-vuln": ("nuclei-scan", "dir-bruteforce", "unauth-exploit"),
-        "rt-exploit": (
-            "webshell-toolkit",
-            "credential-attack",
-            "shell-handler",
-            "vps-reverse-shell",
-        ),
-        "rt-internal": (
-            "gogo-intranet",
-            "fscan-intranet",
-            "suo5-tunnel",
-            "chisel-tunnel",
-            "frp-tunnel",
-            "lateral-movement",
-        ),
-    }
     ctx.register_skill("redteam-preflight", root / "skills" / "redteam-preflight" / "SKILL.md")
     ctx.register_skill("redteam-setup", root / "skills" / "redteam-setup" / "SKILL.md")
-    for name in role_skills.get(profile, ()):
-        ctx.register_skill(name, root / "skills" / name / "SKILL.md")
-    role = root / "roles" / f"{profile}.md"
-    if role.is_file():
-        ctx.register_skill(profile, role)
+
+    if profile.startswith("rt-"):
+        for name in _ROLE_SKILLS.get(profile, ()):
+            ctx.register_skill(name, root / "skills" / name / "SKILL.md")
+        role = root / "roles" / f"{profile}.md"
+        if role.is_file():
+            ctx.register_skill(profile, role)
