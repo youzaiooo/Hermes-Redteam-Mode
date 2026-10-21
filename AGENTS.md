@@ -120,6 +120,27 @@ Five sections: 态势 / 资产 / 成果 / 报告 / 资源. Follow the active ses
 hardcoded colors; no JSX syntax (use `jsx()`), imports only from `@hermes/plugin-sdk`, `react`,
 `react/jsx-runtime`. Poll with React Query at a few seconds.
 
+Required API routes (extend the existing router, keep old ones working):
+
+- `GET /engagements` → `{ok, engagements: [{id, display_name, created_at}]}`
+- `GET /engagements/for-session/{session_id}` → `{ok, engagement: {id, display_name} | null}`
+  by scanning each engagement's `session.json` for the session id.
+- `GET /summary/{engagement_id}` → `{ok, summary: {assets, services, vulns, credentials,
+  tunnels, score, stage, score_hits}}`
+- existing `GET /assets/{id}`, `GET /findings/{id}`, `GET /sessions/{id}`, `GET /tunnels/{id}`,
+  `GET /report/{id}`, `GET /skills`, `GET /roles` stay.
+
+Panel behaviour:
+
+- Header: `RedTeam 控制台`, engagement display name or `未绑定靶标`, status dot, refresh.
+- Tabs: 态势 (score, five-stage progress, worker roles), 资产 (table: 地址/状态/首见),
+  成果 (vulns + credentials + tunnels), 报告 (report index + 导出按钮), 资源 (skills
+  可用性 + 角色).
+- Follow `host.state.activeSessionId`: fetch for-session on change; if unbound, show the last
+  engagement and a muted `本会话未绑靶标` hint.
+- Empty states in Chinese (`还没有资产`, `还没有成果`), loading skeletons, error text.
+- `defaultEnabled: true`; the pane should be useful immediately after install.
+
 ## Working rules
 
 - Read the real APIs first: `website/docs/developer-guide/plugins/index.md`,

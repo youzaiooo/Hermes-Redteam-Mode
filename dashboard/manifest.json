@@ -2,14 +2,10 @@
   "name": "hermes-redteam",
   "api": "plugin_api.py",
   "tabs": [
-    "board",
+    "situation",
     "assets",
-    "findings",
-    "sessions",
-    "tunnels",
-    "score",
-    "skills",
-    "roles",
-    "report"
+    "results",
+    "report",
+    "resources"
   ]
 }
