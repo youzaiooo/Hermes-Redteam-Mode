@@ -20,6 +20,7 @@ provides_tools:
   - redteam_score_list
   - redteam_score_report
   - redteam_report_index
+  - redteam_report_export
   - redteam_sessions
   - redteam_agent_slot
   - redteam_dispatch

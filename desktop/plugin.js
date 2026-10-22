@@ -262,7 +262,7 @@ function reportChildren({ engagement, reportPath, loading, error, exportReport }
     jsxs('div', {
       className: 'flex flex-col gap-1.5',
       children: [
-        jsx('div', { className: 'text-xs text-(--ui-text-tertiary)', children: '报告索引' }),
+        jsx('div', { className: 'text-xs text-(--ui-text-tertiary)', children: '最新报告' }),
         jsxs('div', {
           className: 'flex items-center gap-2 rounded border border-(--ui-stroke-secondary) px-2 py-1.5',
           children: [
@@ -273,15 +273,14 @@ function reportChildren({ engagement, reportPath, loading, error, exportReport }
             jsx(Button, {
               variant: 'secondary',
               size: 'sm',
-              disabled: !reportPath,
               onClick: exportReport,
-              children: '导出'
+              children: '导出 Markdown'
             })
           ]
         })
       ]
     }),
-    jsx('div', { className: 'text-xs text-(--ui-text-quaternary)', children: '报告与得分报告由报告索引页汇总' })
+    jsx('div', { className: 'text-xs text-(--ui-text-quaternary)', children: '导出时从靶标数据库即时生成 Markdown' })
   ]
 }
 
@@ -425,7 +424,9 @@ function Pane({ rest }) {
   const vulnRows = findings.data && Array.isArray(findings.data.vulns) ? findings.data.vulns : []
   const credRows = credentials.data && Array.isArray(credentials.data.credentials) ? credentials.data.credentials : []
   const tunnelRows = tunnels.data && Array.isArray(tunnels.data.tunnels) ? tunnels.data.tunnels : []
-  const reportPath = report.data && report.data.path ? report.data.path : ''
+  const reportPath = report.data && report.data.ok !== false
+    ? (report.data.relative_path || report.data.path || '')
+    : ''
   const skillNames = skills.data && Array.isArray(skills.data.skills) ? skills.data.skills : []
   const roleNames = roles.data && Array.isArray(roles.data.roles) ? roles.data.roles : FALLBACK_ROLES
 
@@ -435,7 +436,10 @@ function Pane({ rest }) {
     const download = captureGatewayFileDownload()
     rest(`/report/${engagementId}`)
       .then((found) => {
-        if (found && found.path) download(found.path, 'report-index.md')
+        if (found && found.path) {
+          const name = found.filename || (found.relative_path || 'report.md').split('/').pop()
+          download(found.path, name)
+        }
       })
       .catch(() => {})
   }

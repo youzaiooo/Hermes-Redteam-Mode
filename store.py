@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import json
 import re
@@ -989,40 +990,296 @@ def tunnel_list(root: Path, engagement_id: str) -> str:
     return json.dumps({"ok": True, "count": len(tunnels), "tunnels": tunnels}, ensure_ascii=False)
 
 
+_KNOWLEDGE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS poc (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    cve TEXT NOT NULL DEFAULT '',
+    target_pattern TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    source_url TEXT NOT NULL DEFAULT '',
+    verified INTEGER NOT NULL DEFAULT 0,
+    verified_note TEXT NOT NULL DEFAULT '',
+    engagement TEXT NOT NULL DEFAULT '',
+    asset_target TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS poc_fts USING fts5(
+    title, category, cve, target_pattern, source, source_url,
+    verified, verified_note, engagement, asset_target, created_at
+);
+"""
+
+_POC_COLUMNS = (
+    "id, title, category, cve, target_pattern, source, source_url, "
+    "verified, verified_note, engagement, asset_target, created_at"
+)
+
+_VERIFIED_WORDS = {"verified", "confirmed", "true", "1", "yes", "reproduced"}
+
+
+def _knowledge_db_path(root: Path) -> Path:
+    return Path(root).parent / "knowledge.db"
+
+
+def _knowledge_connect(root: Path) -> sqlite3.Connection:
+    path = _knowledge_db_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(path)
+    db.executescript(_KNOWLEDGE_SCHEMA)
+    return db
+
+
+def _poc_row(row) -> dict:
+    return {
+        "id": row[0],
+        "title": row[1],
+        "category": row[2],
+        "cve": row[3],
+        "target_pattern": row[4],
+        "source": row[5],
+        "source_url": row[6],
+        "verified": bool(row[7]),
+        "verified_note": row[8],
+        "engagement": row[9],
+        "asset_target": row[10],
+        "created_at": row[11],
+    }
+
+
+def _fts_query(query: str) -> str:
+    parts = []
+    for token in query.split():
+        parts.append('"' + token.replace('"', '""') + '"')
+    return " ".join(parts)
+
+
+def _knowledge_search(root: Path, query: str, limit: int = 50) -> list[dict]:
+    with _knowledge_connect(root) as db:
+        ids = [
+            row[0]
+            for row in db.execute(
+                "SELECT rowid FROM poc_fts WHERE poc_fts MATCH ? "
+                "ORDER BY bm25(poc_fts) LIMIT ?",
+                (_fts_query(query), limit),
+            )
+        ]
+        if not ids:
+            return []
+        placeholders = ", ".join("?" for _ in ids)
+        rows = db.execute(
+            f"SELECT {_POC_COLUMNS} FROM poc WHERE id IN ({placeholders})",
+            ids,
+        ).fetchall()
+    by_id = {row[0]: _poc_row(row) for row in rows}
+    return [by_id[i] for i in ids if i in by_id]
+
+
+def _knowledge_add(
+    root: Path,
+    *,
+    title: str,
+    category: str,
+    cve: str,
+    target_pattern: str,
+    source: str,
+    source_url: str,
+    verified: bool,
+    verified_note: str,
+    engagement: str,
+    asset_target: str,
+) -> dict:
+    verified_flag = 1 if verified else 0
+    with _knowledge_connect(root) as db:
+        existing = db.execute(
+            "SELECT id FROM poc WHERE title = ? AND cve = ? AND source = ?",
+            (title, cve, source),
+        ).fetchone()
+        if existing:
+            return {"id": existing[0], "deduped": True}
+        cursor = db.execute(
+            "INSERT INTO poc (title, category, cve, target_pattern, source, source_url, "
+            "verified, verified_note, engagement, asset_target) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                title,
+                category,
+                cve,
+                target_pattern,
+                source,
+                source_url,
+                verified_flag,
+                verified_note,
+                engagement,
+                asset_target,
+            ),
+        )
+        row_id = cursor.lastrowid
+        created_at = db.execute(
+            "SELECT created_at FROM poc WHERE id = ?", (row_id,)
+        ).fetchone()[0]
+        db.execute(
+            "INSERT INTO poc_fts (rowid, title, category, cve, target_pattern, source, "
+            "source_url, verified, verified_note, engagement, asset_target, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                row_id,
+                title,
+                category,
+                cve,
+                target_pattern,
+                source,
+                source_url,
+                str(verified_flag),
+                verified_note,
+                engagement,
+                asset_target,
+                created_at,
+            ),
+        )
+    return {"id": row_id, "deduped": False}
+
+
+def _fts_resync(db: sqlite3.Connection, row_id: int) -> None:
+    row = db.execute(
+        f"SELECT {_POC_COLUMNS} FROM poc WHERE id = ?", (row_id,)
+    ).fetchone()
+    if row is None:
+        return
+    db.execute("DELETE FROM poc_fts WHERE rowid = ?", (row_id,))
+    db.execute(
+        "INSERT INTO poc_fts (rowid, title, category, cve, target_pattern, source, "
+        "source_url, verified, verified_note, engagement, asset_target, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            row[6],
+            str(row[7]),
+            row[8],
+            row[9],
+            row[10],
+            row[11],
+        ),
+    )
+
+
+def _engagement_poc_ref(
+    engagement_id: str,
+    category: str,
+    asset_key: str,
+    source: str,
+) -> dict:
+    return {
+        "id": None,
+        "title": "",
+        "category": category,
+        "cve": "",
+        "target_pattern": "",
+        "source": source,
+        "source_url": "",
+        "verified": None,
+        "verified_note": "",
+        "engagement": engagement_id,
+        "asset_target": asset_key,
+        "created_at": "",
+    }
+
+
 def poc_add(
     root: Path,
     engagement_id: str,
     category: str,
     asset_key: str,
     source_path: str,
+    title: str = "",
+    cve: str = "",
+    target_pattern: str = "",
+    source: str = "",
+    source_url: str = "",
+    verified: bool = False,
+    verified_note: str = "",
 ) -> str:
     if not _has_reservation(Path(root) / engagement_id / "index.db", engagement_id):
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
     if not category.strip() or source_path.startswith("/") or ".." in Path(source_path).parts:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
+
+    title = _clean(title)
+    cve = _clean(cve)
+    target_pattern = _clean(target_pattern)
+    source = _clean(source) or _clean(source_url) or _clean(source_path)
+    source_url = _clean(source_url)
+    verified_note = _clean(verified_note)
+
     with _connect(Path(root) / engagement_id / "index.db") as db:
         db.execute(
-            "INSERT INTO poc_ref (engagement_id, category, asset_key, source_path) "
-            "VALUES (?, ?, ?, ?)",
-            (engagement_id, category, asset_key, source_path),
+            "INSERT INTO knowledge_ref (engagement_id, asset_key, relative_path) "
+            "VALUES (?, ?, ?)",
+            (engagement_id, asset_key, source_path),
         )
-    return json.dumps({"ok": True, "asset_key": asset_key}, ensure_ascii=False)
+
+    global_row = _knowledge_add(
+        root,
+        title=title,
+        category=_clean(category),
+        cve=cve,
+        target_pattern=target_pattern,
+        source=source,
+        source_url=source_url,
+        verified=bool(verified),
+        verified_note=verified_note,
+        engagement=engagement_id,
+        asset_target=_clean(asset_key),
+    )
+    return json.dumps(
+        {
+            "ok": True,
+            "id": global_row["id"],
+            "deduped": global_row["deduped"],
+            "asset_key": asset_key,
+        },
+        ensure_ascii=False,
+    )
 
 
-def poc_search(root: Path, engagement_id: str, category: str) -> str:
+def poc_search(root: Path, engagement_id: str, query: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+    query = " ".join(str(query or "").split())
+    if not query:
+        return json.dumps({"ok": True, "count": 0, "pocs": []}, ensure_ascii=False)
+
+    results = _knowledge_search(root, query)
+    global_keys = {(item["engagement"], item["asset_target"]) for item in results}
+
+    extras: list[dict] = []
+    like = f"%{query}%"
     with _connect(db_path) as db:
-        rows = db.execute(
+        for asset_key, relative_path in db.execute(
+            "SELECT asset_key, relative_path FROM knowledge_ref "
+            "WHERE engagement_id = ? AND (relative_path LIKE ? OR asset_key LIKE ?)",
+            (engagement_id, like, like),
+        ):
+            if (engagement_id, asset_key) in global_keys:
+                continue
+            extras.append(_engagement_poc_ref(engagement_id, "", asset_key, relative_path))
+        for category, asset_key, source_path in db.execute(
             "SELECT category, asset_key, source_path FROM poc_ref "
-            "WHERE engagement_id = ? AND category = ?",
-            (engagement_id, category),
-        ).fetchall()
-    pocs = [
-        {"category": row[0], "asset_key": row[1], "source_path": row[2]}
-        for row in rows
-    ]
+            "WHERE engagement_id = ? AND (category LIKE ? OR source_path LIKE ?)",
+            (engagement_id, like, like),
+        ):
+            if (engagement_id, asset_key) in global_keys:
+                continue
+            extras.append(_engagement_poc_ref(engagement_id, category, asset_key, source_path))
+
+    pocs = results + extras
     return json.dumps({"ok": True, "count": len(pocs), "pocs": pocs}, ensure_ascii=False)
 
 
@@ -1030,41 +1287,57 @@ def poc_list(root: Path, engagement_id: str) -> str:
     db_path = Path(root) / engagement_id / "index.db"
     if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    with _connect(db_path) as db:
+    with _knowledge_connect(root) as db:
         rows = db.execute(
-            "SELECT category, asset_key, source_path, status FROM poc_ref WHERE engagement_id = ?",
+            f"SELECT {_POC_COLUMNS} FROM poc WHERE engagement = ? "
+            "ORDER BY created_at DESC, id DESC",
             (engagement_id,),
         ).fetchall()
-    pocs = [
-        {"category": row[0], "asset_key": row[1], "source_path": row[2], "status": row[3]}
-        for row in rows
-    ]
+    pocs = [_poc_row(row) for row in rows]
     return json.dumps({"ok": True, "count": len(pocs), "pocs": pocs}, ensure_ascii=False)
 
 
 def poc_get(root: Path, engagement_id: str, asset_key: str) -> str:
-    found = json.loads(poc_list(root, engagement_id))
-    if not found["ok"]:
-        return json.dumps(found, ensure_ascii=False)
-    matches = [item for item in found["pocs"] if item["asset_key"] == asset_key]
-    if len(matches) != 1:
+    db_path = Path(root) / engagement_id / "index.db"
+    if not db_path.is_file():
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    return json.dumps({"ok": True, "poc": matches[0]}, ensure_ascii=False)
+    with _knowledge_connect(root) as db:
+        row = db.execute(
+            f"SELECT {_POC_COLUMNS} FROM poc "
+            "WHERE engagement = ? AND asset_target = ? ORDER BY id DESC LIMIT 1",
+            (engagement_id, asset_key),
+        ).fetchone()
+    if row is None:
+        return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+    return json.dumps({"ok": True, "poc": _poc_row(row)}, ensure_ascii=False)
 
 
 def poc_update(root: Path, engagement_id: str, asset_key: str, status: str) -> str:
     if not _has_reservation(Path(root) / engagement_id / "index.db", engagement_id):
         return json.dumps({"ok": False, "error": "reservation_required"}, ensure_ascii=False)
-    if not status.strip():
+    status = _clean(status)
+    if not status:
         return json.dumps({"ok": False, "error": "invalid_input"}, ensure_ascii=False)
-    with _connect(Path(root) / engagement_id / "index.db") as db:
+    verified = 1 if status.lower() in _VERIFIED_WORDS else 0
+    with _knowledge_connect(root) as db:
+        row_id = db.execute(
+            "SELECT id FROM poc WHERE engagement = ? AND asset_target = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (engagement_id, asset_key),
+        ).fetchone()
+        if row_id is None:
+            return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
         changed = db.execute(
-            "UPDATE poc_ref SET status = ? WHERE engagement_id = ? AND asset_key = ?",
-            (status, engagement_id, asset_key),
+            "UPDATE poc SET verified = ?, verified_note = ? WHERE id = ?",
+            (verified, status, row_id[0]),
         ).rowcount
+        _fts_resync(db, row_id[0])
     if changed != 1:
         return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
-    return json.dumps({"ok": True, "status": status}, ensure_ascii=False)
+    return json.dumps(
+        {"ok": True, "status": status, "verified": bool(verified)},
+        ensure_ascii=False,
+    )
 
 
 def poc_use(root: Path, engagement_id: str, asset_key: str, result: str) -> str:
@@ -1076,11 +1349,21 @@ def poc_use(root: Path, engagement_id: str, asset_key: str, result: str) -> str:
     found = json.loads(poc_get(root, engagement_id, asset_key))
     if not found["ok"]:
         return json.dumps(found, ensure_ascii=False)
-    updated = json.loads(poc_update(root, engagement_id, asset_key, line))
-    if not updated["ok"]:
-        return json.dumps(updated, ensure_ascii=False)
+    with _knowledge_connect(root) as db:
+        row_id = db.execute(
+            "SELECT id FROM poc WHERE engagement = ? AND asset_target = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (engagement_id, asset_key),
+        ).fetchone()
+        if row_id is None:
+            return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+        db.execute(
+            "UPDATE poc SET verified = 1, verified_note = ? WHERE id = ?",
+            (line, row_id[0]),
+        )
+        _fts_resync(db, row_id[0])
     return json.dumps(
-        {"ok": True, "source_path": found["poc"]["source_path"], "result": line},
+        {"ok": True, "source": found["poc"]["source"], "result": line},
         ensure_ascii=False,
     )
 
@@ -1630,6 +1913,218 @@ def write_score_report(root: Path, engagement_id: str) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return str(path)
+
+
+_REPORT_FILE_RE = re.compile(r"^report-\d{8}-\d{6}(?:-\d+)?\.md$")
+
+
+def _markdown_cell(value: object) -> str:
+    return _clean(value).replace("|", "\\|")
+
+
+def _report_excerpt(markdown: str, lines: int = 8, chars: int = 300) -> str:
+    head = "\n".join(markdown.strip().splitlines()[:lines])
+    return head if len(head) <= chars else head[:chars].rstrip() + "…"
+
+
+def _build_report_markdown(root: Path, engagement_id: str) -> str:
+    base = Path(root) / engagement_id
+    db_path = base / "index.db"
+    if not db_path.is_file():
+        raise FileNotFoundError(engagement_id)
+
+    with _connect(db_path) as db:
+        name_row = db.execute(
+            "SELECT display_name FROM engagement WHERE id = ?", (engagement_id,)
+        ).fetchone()
+        display_name = name_row[0] if name_row else engagement_id
+        assets = db.execute(
+            "SELECT address, port, title, provenance, scope FROM asset "
+            "WHERE engagement_id = ? ORDER BY first_seen, id",
+            (engagement_id,),
+        ).fetchall()
+        score_rows = db.execute(
+            "SELECT rule_id, COUNT(*), GROUP_CONCAT(evidence_path, ' | ') "
+            "FROM score_event WHERE engagement_id = ? GROUP BY rule_id ORDER BY rule_id",
+            (engagement_id,),
+        ).fetchall()
+        credentials = db.execute(
+            "SELECT asset_key, evidence_path FROM credential_ref WHERE engagement_id = ?",
+            (engagement_id,),
+        ).fetchall()
+        accesses = db.execute(
+            "SELECT asset_key, method, evidence_path FROM access_session WHERE engagement_id = ?",
+            (engagement_id,),
+        ).fetchall()
+        vulns = db.execute(
+            "SELECT title, severity, cve, evidence, evidence_path FROM vuln "
+            "WHERE engagement_id = ? ORDER BY id",
+            (engagement_id,),
+        ).fetchall()
+        steps = db.execute(
+            "SELECT tool, result, summary, stage_code, asset_key FROM chain_step "
+            "WHERE engagement_id = ? ORDER BY id",
+            (engagement_id,),
+        ).fetchall()
+
+    lines = [
+        f"# 报告 — {display_name}",
+        "",
+        f"靶标: {engagement_id}",
+        "",
+        "## 资产证明",
+        "",
+    ]
+    if assets:
+        lines.append("| 地址 | 端口 | 标题 | 来源 | 归属 |")
+        lines.append("|---|---|---|---|---|")
+        for address, port, title, provenance, scope in assets:
+            owner = _clean(scope) or display_name
+            lines.append(
+                "| "
+                + " | ".join(
+                    _markdown_cell(value)
+                    for value in (address, port or "", title, provenance, owner)
+                )
+                + " |"
+            )
+    else:
+        lines.append("（无资产记录）")
+
+    lines += ["", "## 得分汇总", ""]
+    if score_rows:
+        for rule_id, count, paths in score_rows:
+            lines.append(f"- {rule_id}：{count} 次")
+            for path in (paths or "").split(" | "):
+                if path:
+                    lines.append(f"  - {path}")
+    else:
+        lines.append("（无得分记录）")
+
+    lines += ["", "## 凭据与访问", "", "### 凭据（掩码指针）", ""]
+    if credentials:
+        for asset_key, evidence_path in credentials:
+            lines.append(f"- {asset_key} → {evidence_path}")
+    else:
+        lines.append("（无凭据记录）")
+
+    lines += ["", "### 访问", ""]
+    if accesses:
+        for asset_key, method, evidence_path in accesses:
+            lines.append(f"- {asset_key}（{_clean(method)}）→ {evidence_path}")
+    else:
+        lines.append("（无访问记录）")
+
+    lines += ["", "## 漏洞复现", "", "### 漏洞", ""]
+    if vulns:
+        for title, severity, cve, evidence, evidence_path in vulns:
+            cve_label = f"（{cve}）" if cve else ""
+            heading = f"- **{_clean(title) or evidence_path}**"
+            if severity:
+                heading += f" {severity}"
+            if cve_label:
+                heading += f" {cve_label}"
+            lines.append(heading.rstrip())
+            if evidence:
+                lines.append(f"  - 证据: {evidence}")
+            if evidence_path:
+                lines.append(f"  - 证据路径: {evidence_path}")
+    else:
+        lines.append("（无漏洞记录）")
+
+    lines += ["", "### 攻击链步骤", ""]
+    if steps:
+        for tool, result, summary, stage_code, asset_key in steps:
+            head = f"- {_clean(asset_key)}"
+            if tool:
+                head += f" [{_clean(tool)}]"
+            if stage_code:
+                head += f"（{_clean(stage_code)}）"
+            lines.append(head)
+            if result:
+                lines.append(f"  - 结果: {result}")
+            if summary:
+                lines.append(f"  - 摘要: {summary}")
+    else:
+        lines.append("（无攻击链步骤）")
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def _write_report_file(root: Path, engagement_id: str, markdown: str) -> tuple[str, str]:
+    reports = Path(root) / engagement_id / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    filename = datetime.now().strftime("report-%Y%m%d-%H%M%S.md")
+    target = reports / filename
+    counter = 1
+    while target.exists():
+        target = reports / f"{filename[:-3]}-{counter}.md"
+        counter += 1
+    target.write_text(markdown, encoding="utf-8")
+    return f"reports/{target.name}", str(target)
+
+
+def export_report(root: Path, engagement_id: str) -> str:
+    try:
+        markdown = _build_report_markdown(root, engagement_id)
+    except FileNotFoundError:
+        return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+    relative_path, _ = _write_report_file(root, engagement_id, markdown)
+    return json.dumps(
+        {
+            "ok": True,
+            "relative_path": relative_path,
+            "excerpt": _report_excerpt(markdown),
+        },
+        ensure_ascii=False,
+    )
+
+
+def latest_report(root: Path, engagement_id: str) -> str:
+    base = Path(root) / engagement_id
+    if not (base / "index.db").is_file():
+        return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+
+    reports = base / "reports"
+    if reports.is_dir():
+        existing = [
+            path
+            for path in reports.glob("report-*.md")
+            if _REPORT_FILE_RE.match(path.name)
+        ]
+        if existing:
+            path = max(existing, key=lambda item: (item.stat().st_mtime, item.name))
+            markdown = path.read_text(encoding="utf-8")
+            return json.dumps(
+                {
+                    "ok": True,
+                    "path": str(path),
+                    "relative_path": f"reports/{path.name}",
+                    "filename": path.name,
+                    "markdown": markdown,
+                    "excerpt": _report_excerpt(markdown),
+                    "generated": False,
+                },
+                ensure_ascii=False,
+            )
+
+    try:
+        markdown = _build_report_markdown(root, engagement_id)
+    except FileNotFoundError:
+        return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+    relative_path, absolute = _write_report_file(root, engagement_id, markdown)
+    return json.dumps(
+        {
+            "ok": True,
+            "path": absolute,
+            "relative_path": relative_path,
+            "filename": Path(relative_path).name,
+            "markdown": markdown,
+            "excerpt": _report_excerpt(markdown),
+            "generated": True,
+        },
+        ensure_ascii=False,
+    )
 
 
 def _write_once(path: Path, content: str) -> None:

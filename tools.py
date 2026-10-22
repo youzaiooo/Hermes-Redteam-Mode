@@ -34,6 +34,7 @@ from .store import (
     credential_add,
     credential_list,
     domain_index,
+    export_report,
     knowledge_add,
     knowledge_list,
     note_add,
@@ -338,6 +339,13 @@ def poc_add_tool(args: dict, **kwargs) -> str:
             args.get("category", ""),
             args.get("asset_key", ""),
             args.get("source_path", ""),
+            title=args.get("title", "") or "",
+            cve=args.get("cve", "") or "",
+            target_pattern=args.get("target_pattern", "") or "",
+            source=args.get("source", "") or "",
+            source_url=args.get("source_url", "") or "",
+            verified=bool(args.get("verified")),
+            verified_note=args.get("verified_note", "") or "",
         )
     except Exception as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
@@ -345,7 +353,7 @@ def poc_add_tool(args: dict, **kwargs) -> str:
 
 def poc_search_tool(args: dict, **kwargs) -> str:
     del kwargs
-    return _call(poc_search, args, ("id", "category"))
+    return _call(poc_search, args, ("id", "query"))
 
 
 def asset_link_tool(args: dict, **kwargs) -> str:
@@ -449,6 +457,14 @@ def report_index(args: dict, **kwargs) -> str:
     try:
         path = write_report_index(_root(), args.get("id", ""))
         return json.dumps({"ok": True, "path": path}, ensure_ascii=False)
+    except Exception as exc:
+        return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
+
+
+def report_export_tool(args: dict, **kwargs) -> str:
+    del kwargs
+    try:
+        return export_report(_root(), args.get("id", ""))
     except Exception as exc:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
@@ -1078,12 +1094,21 @@ TOOLS = [
         "redteam_poc_add",
         _schema(
             "redteam_poc_add",
-            "Store a POC category and source path. Not the POC body.",
+            "Record POC metadata in the per-engagement knowledge ref and the global "
+            "knowledge base. Store a sanitized note or evidence path only, never "
+            "exploit code or credential values. Deduplicated on title + cve + source.",
             {
                 "id": _ID,
                 "category": {"type": "string"},
                 "asset_key": {"type": "string"},
                 "source_path": {"type": "string"},
+                "title": {"type": "string"},
+                "cve": {"type": "string"},
+                "target_pattern": {"type": "string"},
+                "source": {"type": "string"},
+                "source_url": {"type": "string"},
+                "verified": {"type": "boolean"},
+                "verified_note": {"type": "string"},
             },
             ["id", "category", "asset_key", "source_path"],
         ),
@@ -1093,9 +1118,10 @@ TOOLS = [
         "redteam_poc_search",
         _schema(
             "redteam_poc_search",
-            "Search POC pointers by category.",
-            {"id": _ID, "category": {"type": "string"}},
-            ["id", "category"],
+            "Full-text search the global POC knowledge base plus this engagement's "
+            "POC refs. Returns source and verified fields.",
+            {"id": _ID, "query": {"type": "string"}},
+            ["id", "query"],
         ),
         poc_search_tool,
     ),
@@ -1229,6 +1255,18 @@ TOOLS = [
             ["id"],
         ),
         report_index,
+    ),
+    (
+        "redteam_report_export",
+        _schema(
+            "redteam_report_export",
+            "Generate reports/report-YYYYmmdd-HHMMSS.md from the engagement DB with "
+            "资产证明, 得分汇总, 凭据与访问 (masked pointers), and 漏洞复现 sections. "
+            "Returns the relative path and a short excerpt.",
+            {"id": _ID},
+            ["id"],
+        ),
+        report_export_tool,
     ),
     (
         "redteam_credential_list",

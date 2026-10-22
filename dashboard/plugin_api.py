@@ -40,6 +40,7 @@ sessions = _store.sessions
 tunnel_list = _store.tunnel_list
 vuln_query = _store.vuln_query
 credential_list = _store.credential_list
+latest_report = _store.latest_report
 write_report_index = _store.write_report_index
 
 router = APIRouter()
@@ -251,5 +252,7 @@ def roles() -> dict:
 
 @router.get("/report/{engagement_id}")
 def report(engagement_id: str) -> dict:
-    path = write_report_index(_root(), engagement_id)
-    return {"ok": True, "path": path}
+    payload = json.loads(latest_report(_root(), engagement_id))
+    if not payload.get("ok"):
+        raise HTTPException(status_code=404, detail=payload.get("error", "not_found"))
+    return payload
