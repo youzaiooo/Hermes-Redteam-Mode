@@ -34,7 +34,7 @@ tests/
 ### 方式 A：一条命令（推荐）
 
 ```bash
-hermes plugins install youzaiooo/Hermes-dsh-redteam-mode --enable
+hermes plugins install youzaiooo/Hermes-Redteam-Mode --enable
 bash ~/.hermes/plugins/hermes-redteam/scripts/install.sh
 ```
 
@@ -49,7 +49,7 @@ bash ~/.hermes/plugins/hermes-redteam/scripts/install.sh
 ### 方式 B：源码开发
 
 ```bash
-git clone https://github.com/youzaiooo/Hermes-dsh-redteam-mode ~/src/hermes-redteam
+git clone https://github.com/youzaiooo/Hermes-Redteam-Mode ~/src/hermes-redteam
 ln -sfn ~/src/hermes-redteam ~/.hermes/plugins/hermes-redteam
 bash ~/src/hermes-redteam/scripts/install.sh
 ```
