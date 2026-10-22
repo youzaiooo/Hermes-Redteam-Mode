@@ -9,11 +9,13 @@ a JSON string.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROLE_SUFFIXES = ("recon", "asset", "vuln", "exploit", "internal")
@@ -143,6 +145,15 @@ def dispatch(args: dict, session_id: str = "", task_id: str = "", parent_agent: 
     assignee = f"rt-{role}"
     title = str(args.get("title", "")).strip() or task
     brief = _brief(engagement_dir, engagement_dir.name, assignee, task)
+    # Idempotency: the same engagement + role + task text returns the existing card
+    # instead of stacking duplicates (observed when the commander re-planned the same
+    # step). ``rerun: true`` deliberately bypasses it.
+    dedupe_key = (
+        f"rt-{engagement_dir.name}-{assignee}-"
+        f"{hashlib.sha1(task.strip().encode('utf-8')).hexdigest()[:12]}"
+    )
+    if args.get("rerun"):
+        dedupe_key = f"{dedupe_key}-{int(time.time())}"
 
     cmd = _hermes_argv() + [
         "kanban",
@@ -154,6 +165,8 @@ def dispatch(args: dict, session_id: str = "", task_id: str = "", parent_agent: 
         f"dir:{engagement_dir}",
         "--body",
         brief,
+        "--idempotency-key",
+        dedupe_key,
         "--json",
     ]
     priority = args.get("priority")

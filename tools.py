@@ -233,6 +233,11 @@ def vuln_tool(args: dict, **kwargs) -> str:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
 
+def vuln_query_tool(args: dict, **kwargs) -> str:
+    del kwargs
+    return _call(vuln_query, args, ("id", "asset_key"))
+
+
 def http_evidence_tool(args: dict, **kwargs) -> str:
     try:
         gate = _session_gate(args, kwargs)
@@ -964,6 +969,19 @@ TOOLS = [
         vuln_tool,
     ),
     (
+        "redteam_vuln_query",
+        _schema(
+            "redteam_vuln_query",
+            "List recorded vulnerabilities for an engagement, optionally for one asset.",
+            {
+                "id": _ID,
+                "asset_key": {"type": "string"},
+            },
+            ["id"],
+        ),
+        vuln_query_tool,
+    ),
+    (
         "redteam_http_evidence_add",
         _schema(
             "redteam_http_evidence_add",
@@ -1631,7 +1649,8 @@ TOOLS = [
         "redteam_dispatch",
         _schema(
             "redteam_dispatch",
-            "Create a kanban card assigning a task to one execution profile.",
+            "Create a kanban card assigning a task to one execution profile. The same "
+            "engagement + role + task text is deduplicated and returns the existing card.",
             {
                 "role": {
                     "type": "string",
@@ -1641,6 +1660,10 @@ TOOLS = [
                 "title": {"type": "string"},
                 "priority": {"type": "integer"},
                 "engagement_id": {"type": "string"},
+                "rerun": {
+                    "type": "boolean",
+                    "description": "Set true only to deliberately re-run an identical task.",
+                },
             },
             ["role", "task"],
         ),

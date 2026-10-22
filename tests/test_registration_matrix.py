@@ -45,8 +45,11 @@ def test_asset_role_tools():
 def test_vuln_role_tools():
     tools = _registered("rt-vuln")
     assert "redteam_vuln_add" in tools
+    assert "redteam_vuln_query" in tools
     assert "redteam_poc_use" in tools
     assert "redteam_finding_add" in tools
+    assert "redteam_asset_test" in tools
+    assert "redteam_score_hit" in tools
     assert "redteam_asset_add" not in tools
 
 
@@ -55,6 +58,7 @@ def test_exploit_role_tools():
     assert "redteam_access_add" in tools
     assert "redteam_webshell_add" in tools
     assert "redteam_shot_add" in tools
+    assert "redteam_score_hit" in tools
     assert "redteam_vuln_add" not in tools
 
 
@@ -63,4 +67,5 @@ def test_internal_role_tools():
     assert "redteam_tunnel_add" in tools
     assert "redteam_tunnel_update" in tools
     assert "redteam_asset_add" in tools
+    assert "redteam_chain_add" in tools
     assert "redteam_webshell_add" not in tools

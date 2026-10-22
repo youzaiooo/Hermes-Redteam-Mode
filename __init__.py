@@ -61,12 +61,14 @@ _ROLE_TOOLS = {
             "redteam_asset_timeline",
             "redteam_web_list",
             "redteam_asset_get",
+            "redteam_asset_test",
         }
     ),
     "rt-vuln": frozenset(
         {
             "redteam_finding_add",
             "redteam_vuln_add",
+            "redteam_vuln_query",
             "redteam_vuln_update",
             "redteam_http_evidence_add",
             "redteam_poc_add",
@@ -74,6 +76,8 @@ _ROLE_TOOLS = {
             "redteam_poc_use",
             "redteam_knowledge_add",
             "redteam_knowledge_list",
+            "redteam_asset_test",
+            "redteam_score_hit",
         }
     ),
     "rt-exploit": frozenset(
@@ -95,6 +99,7 @@ _ROLE_TOOLS = {
             "redteam_shot_delete",
             "redteam_attack_file_add",
             "redteam_attack_file_list",
+            "redteam_score_hit",
         }
     ),
     "rt-internal": frozenset(
@@ -104,6 +109,9 @@ _ROLE_TOOLS = {
             "redteam_tunnel_add",
             "redteam_tunnel_update",
             "redteam_tunnel_list",
+            "redteam_chain_add",
+            "redteam_chain_list",
+            "redteam_score_hit",
         }
     ),
 }

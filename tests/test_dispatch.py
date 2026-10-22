@@ -75,6 +75,29 @@ def test_dispatch_builds_kanban_card(tmp_path: Path, monkeypatch):
     assert "记录要求" in body
 
 
+def test_dispatch_uses_stable_idempotency_key(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    root = tmp_path / "redteam" / "engagements"
+    open_engagement(root, "lab-01", "Lab 01")
+    _fill_authorization(root / "lab-01")
+
+    keys: list[str] = []
+
+    def fake_run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        keys.append(cmd[cmd.index("--idempotency-key") + 1])
+        return _completed(cmd, json.dumps({"id": "t-1", "assignee": "rt-recon", "status": "ready"}))
+
+    monkeypatch.setattr("hermes_redteam.dispatch._run_kanban", fake_run)
+
+    dispatch({"role": "recon", "task": "同一任务", "engagement_id": "lab-01"})
+    dispatch({"role": "recon", "task": "同一任务", "engagement_id": "lab-01"})
+    dispatch({"role": "recon", "task": "同一任务", "engagement_id": "lab-01", "rerun": True})
+
+    assert keys[0] == keys[1]
+    assert keys[2] != keys[1]
+    assert keys[0].startswith("rt-lab-01-rt-recon-")
+
+
 def test_dispatch_resolves_engagement_from_session(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     root = tmp_path / "redteam" / "engagements"
