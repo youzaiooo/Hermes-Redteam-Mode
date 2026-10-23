@@ -78,6 +78,10 @@ powershell -ExecutionPolicy Bypass -File scripts\install-desktop.ps1
 | 一直 401 / 登录页 | 桌面 App 没有登录远程网关；先在 App 里完成网关登录（远程用 native bearer，不是本地 cookie） |
 | 远端连不上 9119 | WireGuard 是否通；网关是否监听 `0.0.0.0:9119`；防火墙是否放行 |
 
-## 5. 为什么面板不会读本地文件
+## 5. 版本要一致
+
+网关执行 `hermes plugins update hermes-redteam` 后，客户端也要更新桌面半边（重新 Install from Git，或重跑 `install-desktop.sh`），否则 UI 可能调用到旧版 API。面板页脚会显示网关连接状态；网关断开时提示「显示上次数据」。
+
+## 6. 为什么面板不会读本地文件
 
 `desktop/plugin.js` 只调用 `ctx.rest('/…')`（网关 API）和 `captureGatewayFileDownload()`（网关文件下载）。它不读客户端本地路径，也不假设网关和 App 在同一台机器，所以同一份桌面半边可以同时用于本机和远程。
