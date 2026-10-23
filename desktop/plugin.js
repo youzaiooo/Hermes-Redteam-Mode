@@ -23,7 +23,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 const ID = 'hermes-redteam'
 const POLL_MS = 4000
 // Keep in sync with plugin.yaml `version`; tests/test_version_sync.py guards it.
-const DESKTOP_VERSION = '0.3.0'
+const DESKTOP_VERSION = '0.3.1'
 
 const TABS = [
   ['situation', '态势'],
@@ -494,7 +494,6 @@ function Pane({ rest }) {
   const [newScope, setNewScope] = useState('')
   const activeSessionId = useValue(host.state.activeSessionId)
   const gatewayState = useValue(host.state.gateway)
-  const profile = useValue(host.state.profile)
   const queryClient = useQueryClient()
   const versionQuery = useRest(rest, ['plugin-version'], '/version')
   const gatewayVersion = versionQuery.data && versionQuery.data.version ? String(versionQuery.data.version) : ''
@@ -581,7 +580,7 @@ function Pane({ rest }) {
     const scope = newScope.trim() || target
     const prompt = `红队模式：目标 ${target}，范围 ${scope}，已授权，只测这个范围。请加载 redteam-commander 技能，先调用 redteam_preflight，再调用 redteam_engagement_open 建靶标并绑定当前会话，然后按阶段派工。`
     setShowNew(false)
-    host.newChat(profile || undefined)
+    host.newChat('default')
     await new Promise((resolve) => setTimeout(resolve, 350))
     let sent = false
     try {
