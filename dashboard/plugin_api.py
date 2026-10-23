@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -44,6 +45,21 @@ latest_report = _store.latest_report
 write_report_index = _store.write_report_index
 
 router = APIRouter()
+
+
+def _plugin_version() -> str:
+    """Read the manifest version so a stale desktop half can be detected."""
+    try:
+        manifest = (Path(__file__).resolve().parents[1] / "plugin.yaml").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    match = re.search(r"^version:\s*([^\s#]+)", manifest, re.MULTILINE)
+    return match.group(1).strip("'\"") if match else ""
+
+
+@router.get("/version")
+def version_info() -> dict:
+    return {"version": _plugin_version()}
 
 
 def _home() -> Path:

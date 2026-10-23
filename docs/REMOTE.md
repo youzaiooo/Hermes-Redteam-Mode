@@ -60,6 +60,10 @@ powershell -ExecutionPolicy Bypass -File scripts\install-desktop.ps1
 
 然后 `Ctrl/⌘ + K` → **Reload desktop plugins** → 在插件页启用 `hermes-redteam`。
 
+### 版本不一致时
+
+面板顶部会出现一条提示：`客户端 UI vX · 网关 vY`，旁边是 **更新本地 UI** 按钮。点它会让 App 直接用 `installDesktopPlugin` 从 GitHub 重装桌面半边，不需要记命令。更新后如果面板没自动刷新，再按一次 `Ctrl/⌘ + K` → Reload desktop plugins。
+
 ## 3. 验证远程链路
 
 1. 桌面 App 已连接到**远程网关**（不是本机 localhost）。
@@ -80,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-desktop.ps1
 
 ## 5. 版本要一致
 
-网关执行 `hermes plugins update hermes-redteam` 后，客户端也要更新桌面半边（重新 Install from Git，或重跑 `install-desktop.sh`），否则 UI 可能调用到旧版 API。面板页脚会显示网关连接状态；网关断开时提示「显示上次数据」。
+网关执行 `hermes plugins update hermes-redteam` 后，客户端也要更新桌面半边（重新 Install from Git，或点面板顶部的 **更新本地 UI**）。面板会对比 `plugin.yaml` 版本和桌面代码里的 `DESKTOP_VERSION`，不一致时显示 `客户端 UI vX · 网关 vY` 并给出更新按钮；网关断开时页脚提示「显示上次数据」。
 
 ## 6. 为什么面板不会读本地文件
 

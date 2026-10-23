@@ -19,4 +19,5 @@ def test_dashboard_exposes_read_routes():
         "/skills",
         "/summary/{engagement_id}",
         "/tunnels/{engagement_id}",
+        "/version",
     ]

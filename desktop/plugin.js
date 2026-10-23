@@ -22,6 +22,8 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'hermes-redteam'
 const POLL_MS = 4000
+// Keep in sync with plugin.yaml `version`; tests/test_version_sync.py guards it.
+const DESKTOP_VERSION = '0.2.1'
 
 const TABS = [
   ['situation', '态势'],
@@ -444,6 +446,9 @@ function Pane({ rest }) {
   const activeSessionId = useValue(host.state.activeSessionId)
   const gatewayState = useValue(host.state.gateway)
   const queryClient = useQueryClient()
+  const versionQuery = useRest(rest, ['plugin-version'], '/version')
+  const gatewayVersion = versionQuery.data && versionQuery.data.version ? String(versionQuery.data.version) : ''
+  const needsUpdate = Boolean(gatewayVersion && gatewayVersion !== DESKTOP_VERSION)
 
   // A new session must start clean: drop any manual selection when the active
   // session changes (including to null on a fresh, unbound session).
@@ -496,6 +501,27 @@ function Pane({ rest }) {
       .catch((error) => host.notifyError(error, '报告导出失败'))
   }
 
+  const updateDesktopUI = async () => {
+    const bridge = window.hermesDesktop
+    if (!bridge || typeof bridge.installDesktopPlugin !== 'function') {
+      host.notify({ kind: 'warning', message: '请用 App 的 Install from Git 更新桌面插件' })
+      return
+    }
+    try {
+      const result = await bridge.installDesktopPlugin({
+        repo: 'youzaiooo/Hermes-Redteam-Mode',
+        force: true
+      })
+      if (result && result.ok) {
+        host.notify({ kind: 'success', message: '桌面 UI 已更新；若面板未刷新，请按 Ctrl/⌘+K → Reload desktop plugins' })
+      } else {
+        host.notifyError(new Error(result && result.error ? result.error : 'install failed'), '桌面 UI 更新失败')
+      }
+    } catch (error) {
+      host.notifyError(error, '桌面 UI 更新失败')
+    }
+  }
+
   const state = {
     tab,
     engagement,
@@ -522,6 +548,23 @@ function Pane({ rest }) {
     className: 'flex h-full flex-col text-sm text-(--ui-text-secondary)',
     children: [
       header({ engagement, bound, refresh, onClear: () => setManualId('') }),
+      needsUpdate
+        ? jsxs('div', {
+            className: 'flex items-center gap-2 border-b border-(--ui-stroke-secondary) bg-(--ui-bg-quaternary) px-3 py-1.5 text-[0.6875rem] text-(--ui-text-secondary)',
+            children: [
+              jsx('span', {
+                className: 'min-w-0 flex-1 truncate',
+                children: `客户端 UI v${DESKTOP_VERSION} · 网关 v${gatewayVersion}`
+              }),
+              jsx(Button, {
+                variant: 'secondary',
+                size: 'xs',
+                onClick: updateDesktopUI,
+                children: '更新本地 UI'
+              })
+            ]
+          })
+        : null,
       tabsBar(tab, setTab),
       jsx(ScrollArea, {
         className: 'min-h-0 flex-1',
