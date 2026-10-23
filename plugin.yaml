@@ -25,3 +25,5 @@ provides_tools:
   - redteam_agent_slot
   - redteam_dispatch
   - redteam_dispatch_status
+provides_hooks:
+  - pre_tool_call

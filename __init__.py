@@ -31,7 +31,6 @@ _COMMANDER_TOOLS = frozenset(
 _SHARED_READS = frozenset(
     {
         "redteam_engagement_open",
-        "redteam_session_bind",
         "redteam_session_info",
         "redteam_preflight",
         "redteam_asset_query",

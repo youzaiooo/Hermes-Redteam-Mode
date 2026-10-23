@@ -146,7 +146,7 @@ def engagement_open(args: dict, **kwargs) -> str:
 
         session_id = _session_id(args, kwargs)
         profile = _current_profile()
-        if session_id:
+        if session_id and not profile.startswith("rt-"):
             bound = json.loads(
                 bind_session(root, args.get("id", ""), session_id, profile)
             )
@@ -190,10 +190,16 @@ def engagement_open(args: dict, **kwargs) -> str:
 
 
 def session_bind(args: dict, **kwargs) -> str:
+    profile = _current_profile()
+    if profile.startswith("rt-"):
+        return json.dumps(
+            {"ok": False, "error": "commander_only"}, ensure_ascii=False
+        )
     merged = dict(args)
     session_id = kwargs.get("session_id") or args.get("session_id")
     if session_id:
         merged["session_id"] = session_id
+    merged["profile"] = profile
     return _call(bind_session, merged, ("id", "session_id", "profile"))
 
 
