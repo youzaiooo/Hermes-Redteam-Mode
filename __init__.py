@@ -202,7 +202,6 @@ def register(ctx) -> None:
         )
 
     root = Path(__file__).resolve().parent
-    ctx.register_skill("redteam-preflight", root / "skills" / "redteam-preflight" / "SKILL.md")
     ctx.register_skill("redteam-setup", root / "skills" / "redteam-setup" / "SKILL.md")
 
     if profile.startswith("rt-"):

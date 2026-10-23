@@ -22,6 +22,5 @@ def test_execution_profile_registers_only_its_role(monkeypatch):
 
     register(ctx)
 
-    assert ("redteam-preflight", "SKILL.md") in ctx.skills
     assert ("rt-recon", "rt-recon.md") in ctx.skills
     assert all("exploit" not in name for name, _path in ctx.skills)
