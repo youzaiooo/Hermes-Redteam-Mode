@@ -4,7 +4,7 @@
 
 - Hermes Agent 已安装并能 `hermes gateway status` 看到 running。
 - 已创建五个 profile：`rt-recon`、`rt-asset`、`rt-vuln`、`rt-exploit`、`rt-internal`。
-  每个 profile 需要自己的模型（建议 `deepseek-v4-pro`）与 `.env` 里的模型 key。
+  每个 profile 使用 `deepseek-flash`，`agent.reasoning_effort: xhigh`；key 放在 `.env`。
 - 本机工具链：`nmap`、`nuclei`（模板库）、`ffuf`/`feroxbuster`、`httpx` 等按需安装；
   `redteam_preflight` 会列出缺什么。
 

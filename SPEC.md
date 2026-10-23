@@ -1,5 +1,7 @@
 # hermes-redteam SPEC
 
+> 历史设计稿（P0/P1）。部分假设已过时：default 已启用、插件已 GitHub 安装、授权由靶标名隐含（不再要求五字段表）、preflight 不再注册为技能。当前实现以 README / docs/USAGE.md 和代码为准。
+
 状态：草案，2026-10-16。尚未写插件代码。与本文件冲突的实现视为错误。
 
 ## 目标

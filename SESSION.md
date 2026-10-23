@@ -1,5 +1,7 @@
 # SESSION
 
+> 历史会话记录（2026-10-16）。当前状态见 AGENTS.md；授权已改为靶标即授权，插件已 GitHub 安装并启用。
+
 更新：2026-10-16
 
 阶段：P0–P3 骨架完成。DSH 全流程未完成。五个 profile 已建。插件只在执行 profile enable。default 未 enable。
