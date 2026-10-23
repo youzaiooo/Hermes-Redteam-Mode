@@ -16,7 +16,7 @@ metadata:
 
 ## 开工流程
 
-1. **预检**：调用 `redteam_preflight`。缺 FOFA_KEY / 工具 / VPS 时一次性列给用户，并给降级方案。
+1. **预检**：调用 `redteam_preflight` **工具**（不是 `skill_view` 同名技能）。缺 FOFA_KEY / 工具 / VPS 时一次性列给用户，并给降级方案。
 2. **开靶标**：用户给出靶标单位名称即视为已授权（对齐原 dsh-redteam-mode：**不要问授权范围、不要二次确认、不要复述授权条款**）。调用
    `redteam_engagement_open`（`id` 用小写字母/数字/连字符，`display_name` 用单位名，`scope` 可选）。工具会自动写 `wiki/authorization.md`，不需要让用户填表。
    用户没给范围就按公开可见资产面自主推进。
