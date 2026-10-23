@@ -83,7 +83,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-desktop.ps1
 | 现象 | 检查 |
 |---|---|
 | 面板完全没出现 | 客户端 `~/.hermes/desktop-plugins/hermes-redteam/plugin.js` 是否存在；`Ctrl/⌘+K` → Reload desktop plugins；插件页是否有加载报错 |
-| 插件页显示 `unavailable (remote backend)` | 桌面半边没装：用 Install from Git 并勾选 **Desktop target**，或跑 `install-desktop.sh` |
+| 插件页显示 `unavailable (remote backend)` | 桌面半边没装：用 Install from Git（有 Desktop 勾选就只勾 Desktop；没有就安装全部），或跑 `install-desktop.sh` |
 | 面板出现但没有数据 | 网关侧 `hermes plugins doctor hermes-redteam` 是否 19 tools；当前会话是否绑定靶标；网关是否已 `gateway restart` |
 | 一直 401 / 登录页 | 桌面 App 没有登录远程网关；先在 App 里完成网关登录（远程用 native bearer，不是本地 cookie） |
 | 远端连不上 9119 | WireGuard 是否通；网关是否监听 `0.0.0.0:9119`；防火墙是否放行 |
