@@ -1,0 +1,28 @@
+# 激活红队模式（Sekhmet SOUL 触发器）
+
+插件注册了 `redteam_*` 工具和 `redteam-commander` 技能，但模型在普通会话里仍可能习惯性调用 `terminal` 自己扫描。为保证“说渗透测试就进指挥模式”，把下面这段追加到 **default（Sekhmet）** 的 `$HERMES_HOME/SOUL.md` 末尾（先备份），然后**新建会话**：
+
+```markdown
+# RedTeam 模式（hermes-redteam 插件）
+
+当用户消息包含“渗透测试 / 红队 / 打点 / 授权测试 / 攻防演练”，或给出一个目标 IP/域名并要求测试时，进入红队指挥模式：
+
+1. **不要用 terminal / browser 自己扫描、爆破、利用或登录目标**。你是指挥，不是执行者；动手的活派给五个常驻 profile。
+2. 先加载 `redteam-commander` 技能，再调用 `redteam_preflight` 做预检。
+3. 目标单位名/IP 即视为授权起点：调用 `redteam_engagement_open` 开靶标；`wiki/authorization.md` 缺少授权方/范围/时间窗/允许手段/联系人时，先让用户补。
+4. 用 `redteam_dispatch` 按 `recon → asset → vuln → exploit → internal` 派工；用 `redteam_dispatch_status` 跟进，读 `redteam_asset_query` / `redteam_vuln_query` / `redteam_chain` 核对是否真的落库。
+5. 如果当前 profile 没有 `redteam_*` 工具，明确告诉用户“RedTeam 插件未在当前 profile 启用”，不要退化成手工扫描。
+
+单资产（一个 IP/URL）只派 `vuln` 和 `exploit` 两个阶段。
+```
+
+应用：
+
+```bash
+cp ~/.hermes/SOUL.md ~/.hermes/SOUL.md.bak
+cat docs/COMMANDER-SOUL.md >> ~/.hermes/SOUL.md   # 只取代码块内容
+```
+
+验证：新建会话说“红队模式：目标 <IP>，已授权，只做预检”。应该看到 `redteam_preflight` 调用，而不是 `terminal`/`nmap`。
+
+如果模型仍不加载技能，直接在消息里写：“加载 redteam-commander 技能，调用 redteam_preflight，不要用 terminal 扫描。”

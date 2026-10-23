@@ -20,9 +20,17 @@ hermes gateway restart
 
 ## 2. 开靶标
 
-在 **default（Sekhmet）** 会话里说：
+**先新建一个会话**（旧会话可能还带着更新前的系统提示），然后说：
 
-> 目标：<单位名>，范围：<IP/域名/C 段>，时间窗：<...>，允许手段：<...>
+> 红队模式：目标 <单位名>，范围 <IP/域名/C 段>，时间窗 <...>，允许手段 <...>
+
+或者直接说：
+
+> 对该主机进行渗透测试 <IP>，已授权，只测这个 IP
+
+Sekhmet 的 `SOUL.md` 里有红队触发段：消息里出现“渗透测试 / 红队 / 打点 / 授权测试”时，会先加载 `redteam-commander` 技能并调用 `redteam_preflight`，**不会自己跑 terminal/nmap**。如果没反应，明确补一句：
+
+> 加载 redteam-commander 技能，调用 redteam_preflight，不要用 terminal 扫描。
 
 指挥会：
 
