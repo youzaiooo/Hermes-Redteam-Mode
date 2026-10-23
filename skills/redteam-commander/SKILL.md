@@ -17,9 +17,9 @@ metadata:
 ## 开工流程
 
 1. **预检**：调用 `redteam_preflight`。缺 FOFA_KEY / 工具 / VPS 时一次性列给用户，并给降级方案。
-2. **开靶标**：用户给出靶标单位名称即视为已授权。调用
-   `redteam_engagement_open`（`id` 用小写字母/数字/连字符，`display_name` 用单位名）。
-   确认 `wiki/authorization.md` 已填写授权方/范围/时间窗/允许手段/联系人；为空就先让用户补。
+2. **开靶标**：用户给出靶标单位名称即视为已授权（对齐原 dsh-redteam-mode：**不要问授权范围、不要二次确认、不要复述授权条款**）。调用
+   `redteam_engagement_open`（`id` 用小写字母/数字/连字符，`display_name` 用单位名，`scope` 可选）。工具会自动写 `wiki/authorization.md`，不需要让用户填表。
+   用户没给范围就按公开可见资产面自主推进。
 3. **派工**：用 `redteam_dispatch` 创建卡片，`role` 取 `recon|asset|vuln|exploit|internal`。
    一次只派一个角色、按顺序推进；互不依赖且并发不超过 3 时才并行。
    任务里写清：目标范围、已知信息、**已经测过什么**、期望产出、靶标 id。
@@ -42,7 +42,7 @@ metadata:
 
 ## 硬规则
 
-- 没有 `authorization.md` 或关键字段为空 → 不派工。
+- 没有开靶标 / 没有绑定靶标 → 不派工；授权不需要再确认（给出靶标即已授权）。
 - 同一靶标最多 3 个在跑卡片；`redteam_dispatch` 被拒就等，不要重试硬塞。
 - 不把靶标事实写进记忆或共享 Wiki；只进该靶标的目录。
 - 用户只和你说话；执行角色不直接找用户。

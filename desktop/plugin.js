@@ -23,7 +23,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 const ID = 'hermes-redteam'
 const POLL_MS = 4000
 // Keep in sync with plugin.yaml `version`; tests/test_version_sync.py guards it.
-const DESKTOP_VERSION = '0.2.1'
+const DESKTOP_VERSION = '0.3.0'
 
 const TABS = [
   ['situation', '态势'],
@@ -318,15 +318,22 @@ function resourcesChildren({ skillNames, roleNames, loading, error }) {
   ]
 }
 
-function unboundChildren(listed, onPick) {
+function unboundChildren(listed, onPick, onNew) {
   return [
     jsxs('div', {
-      className: 'flex flex-col gap-1 py-2',
+      className: 'flex flex-col gap-2 py-2',
       children: [
         jsx('div', { className: 'text-sm font-medium text-(--ui-text-primary)', children: '未绑定靶标' }),
         jsx('div', {
           className: 'text-xs text-(--ui-text-tertiary)',
-          children: '新会话不会继承上一次演练。在 Sekhmet 会话里说：目标 <单位名>，我会开靶标并绑定当前会话。'
+          children: '新会话不会继承上一次演练。点下面按钮新建红队会话，输入目标即可；也可以直接说：红队模式：目标 <单位名>。'
+        }),
+        jsx(Button, {
+          variant: 'primary',
+          size: 'sm',
+          className: 'justify-start',
+          onClick: onNew,
+          children: '+ 新建红队会话'
         })
       ]
     }),
@@ -374,7 +381,7 @@ function tabChildren(state) {
   }
 }
 
-function header({ engagement, bound, refresh, onClear }) {
+function header({ engagement, bound, refresh, onClear, onNew }) {
   return jsxs('div', {
     className: 'flex items-center justify-between gap-2 border-b border-(--ui-stroke-secondary) px-3 py-2',
     children: [
@@ -404,8 +411,47 @@ function header({ engagement, bound, refresh, onClear }) {
       jsx(Button, {
         variant: 'ghost',
         size: 'icon-xs',
+        title: '新建红队会话',
+        onClick: onNew,
+        children: jsx(Codicon, { name: 'add', size: 14 })
+      }),
+      jsx(Button, {
+        variant: 'ghost',
+        size: 'icon-xs',
         onClick: refresh,
         children: jsx(Codicon, { name: 'refresh', size: 14 })
+      })
+    ]
+  })
+}
+
+function newSessionForm({ target, scope, setTarget, setScope, onStart, onCancel }) {
+  return jsxs('div', {
+    className: 'flex flex-col gap-2 px-3 py-3',
+    children: [
+      jsx('div', { className: 'text-sm font-medium text-(--ui-text-primary)', children: '新建红队会话' }),
+      jsx('div', {
+        className: 'text-xs text-(--ui-text-tertiary)',
+        children: '输入目标和可选范围。给出目标即视为已授权，不会再问授权字段。'
+      }),
+      jsx('input', {
+        className: 'w-full rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-primary) px-2 py-1.5 text-xs text-(--ui-text-primary) outline-none',
+        placeholder: '目标 IP / 域名 / 单位名',
+        value: target,
+        onChange: (event) => setTarget(event.target.value)
+      }),
+      jsx('input', {
+        className: 'w-full rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-primary) px-2 py-1.5 text-xs text-(--ui-text-primary) outline-none',
+        placeholder: '范围（可选，默认只测目标）',
+        value: scope,
+        onChange: (event) => setScope(event.target.value)
+      }),
+      jsxs('div', {
+        className: 'flex items-center gap-2',
+        children: [
+          jsx(Button, { variant: 'primary', size: 'sm', onClick: onStart, children: '开始' }),
+          jsx(Button, { variant: 'ghost', size: 'sm', onClick: onCancel, children: '取消' })
+        ]
       })
     ]
   })
@@ -443,8 +489,12 @@ function footer(mode, gatewayState) {
 function Pane({ rest }) {
   const [tab, setTab] = useState('situation')
   const [manualId, setManualId] = useState('')
+  const [showNew, setShowNew] = useState(false)
+  const [newTarget, setNewTarget] = useState('')
+  const [newScope, setNewScope] = useState('')
   const activeSessionId = useValue(host.state.activeSessionId)
   const gatewayState = useValue(host.state.gateway)
+  const profile = useValue(host.state.profile)
   const queryClient = useQueryClient()
   const versionQuery = useRest(rest, ['plugin-version'], '/version')
   const gatewayVersion = versionQuery.data && versionQuery.data.version ? String(versionQuery.data.version) : ''
@@ -522,6 +572,42 @@ function Pane({ rest }) {
     }
   }
 
+  const startRedteamSession = async () => {
+    const target = newTarget.trim()
+    if (!target) {
+      host.notify({ kind: 'warning', message: '请先输入目标' })
+      return
+    }
+    const scope = newScope.trim() || target
+    const prompt = `红队模式：目标 ${target}，范围 ${scope}，已授权，只测这个范围。请加载 redteam-commander 技能，先调用 redteam_preflight，再调用 redteam_engagement_open 建靶标并绑定当前会话，然后按阶段派工。`
+    setShowNew(false)
+    host.newChat(profile || undefined)
+    await new Promise((resolve) => setTimeout(resolve, 350))
+    let sent = false
+    try {
+      if (host.composer && typeof host.composer.setDraft === 'function') {
+        const drafted = await host.composer.setDraft('new', prompt)
+        if (drafted && typeof host.composer.submit === 'function') {
+          sent = host.composer.submit('new', prompt)
+        }
+        if (!sent) {
+          const draftedActive = await host.composer.setDraft(null, prompt)
+          if (draftedActive && typeof host.composer.submit === 'function') {
+            sent = host.composer.submit(null, prompt)
+          }
+        }
+      }
+    } catch (error) {
+      host.notifyError(error, '新建红队会话失败')
+    }
+    if (!sent) {
+      host.notify({ kind: 'warning', message: '新会话已创建；请把目标补进输入框后发送' })
+      if (host.composer && host.composer.focus) host.composer.focus(null)
+    }
+    setNewTarget('')
+    setNewScope('')
+  }
+
   const state = {
     tab,
     engagement,
@@ -547,7 +633,7 @@ function Pane({ rest }) {
   return jsxs('div', {
     className: 'flex h-full flex-col text-sm text-(--ui-text-secondary)',
     children: [
-      header({ engagement, bound, refresh, onClear: () => setManualId('') }),
+      header({ engagement, bound, refresh, onClear: () => setManualId(''), onNew: () => setShowNew((value) => !value) }),
       needsUpdate
         ? jsxs('div', {
             className: 'flex items-center gap-2 border-b border-(--ui-stroke-secondary) bg-(--ui-bg-quaternary) px-3 py-1.5 text-[0.6875rem] text-(--ui-text-secondary)',
@@ -565,14 +651,25 @@ function Pane({ rest }) {
             ]
           })
         : null,
-      tabsBar(tab, setTab),
-      jsx(ScrollArea, {
-        className: 'min-h-0 flex-1',
-        children: jsx('div', {
-          className: 'flex flex-col gap-3 px-3 py-3',
-          children: engagement ? tabChildren(state) : unboundChildren(listed, setManualId)
-        })
-      }),
+      showNew
+        ? newSessionForm({
+            target: newTarget,
+            scope: newScope,
+            setTarget: setNewTarget,
+            setScope: setNewScope,
+            onStart: startRedteamSession,
+            onCancel: () => setShowNew(false)
+          })
+        : [
+            tabsBar(tab, setTab),
+            jsx(ScrollArea, {
+              className: 'min-h-0 flex-1',
+              children: jsx('div', {
+                className: 'flex flex-col gap-3 px-3 py-3',
+                children: engagement ? tabChildren(state) : unboundChildren(listed, setManualId, () => setShowNew(true))
+              })
+            })
+          ],
       footer(footerMode, gatewayState)
     ]
   })

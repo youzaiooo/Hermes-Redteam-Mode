@@ -5,7 +5,7 @@ from hermes_redteam.preflight import preflight
 from hermes_redteam.store import open_engagement
 
 
-def test_preflight_blocks_empty_authorization_and_does_not_install(tmp_path: Path):
+def test_preflight_ready_when_target_implies_authorization_and_does_not_install(tmp_path: Path):
     open_engagement(tmp_path, "lab-01", "Lab 01")
     calls: list[str] = []
 
@@ -18,8 +18,8 @@ def test_preflight_blocks_empty_authorization_and_does_not_install(tmp_path: Pat
         )
     )
 
-    assert result["status"] == "blocked"
-    assert result["reason"] == "empty_authorization"
+    assert result["status"] == "ready"
+    assert result["authorization"] == "implied_by_target"
     assert "nmap" in result["missing"]
     assert calls == []
     assert "install" not in result

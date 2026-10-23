@@ -82,7 +82,7 @@ bash ~/src/hermes-redteam/scripts/install.sh
 
 ## 安全边界
 
-- 没有 `authorization.md` 或关键字段为空，`redteam_dispatch` 拒绝派工。
+- 没开靶标 / 没绑定会话，`redteam_dispatch` 拒绝派工；用户给出靶标即视为授权（对齐原 dsh-redteam-mode），`authorization.md` 由 `redteam_engagement_open` 自动生成作为审计记录，不需要用户填表。
 - 派工卡片带靶标目录与范围，worker 只测卡片内的目标。
 - 凭据只存指针/来源，命令正文与 payload 不入库。
 - 演练事实不进记忆、不进共享 Wiki；整个靶标目录可直接删除。

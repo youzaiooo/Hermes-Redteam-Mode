@@ -5,8 +5,8 @@ from pathlib import Path
 from hermes_redteam.store import open_engagement
 
 
-def test_open_creates_index_wiki_and_empty_authorization(tmp_path: Path):
-    result = json.loads(open_engagement(tmp_path, "lab-01", "Lab 01"))
+def test_open_creates_index_wiki_and_implied_authorization(tmp_path: Path):
+    result = json.loads(open_engagement(tmp_path, "lab-01", "Lab 01", scope="10.0.0.0/24"))
 
     root = tmp_path / "lab-01"
     assert result["ok"] is True
@@ -18,8 +18,10 @@ def test_open_creates_index_wiki_and_empty_authorization(tmp_path: Path):
     assert (root / "raw").is_dir()
 
     auth = (root / "wiki" / "authorization.md").read_text(encoding="utf-8")
-    for field in ("授权方", "范围", "时间窗", "允许手段", "联系人"):
-        assert f"{field}：待填写" in auth
+    assert "待填写" not in auth
+    assert "范围：10.0.0.0/24" in auth
+    assert "授权依据" in auth
+    assert "无需二次确认" in auth
 
     with sqlite3.connect(root / "index.db") as db:
         row = db.execute(

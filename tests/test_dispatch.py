@@ -120,7 +120,7 @@ def test_dispatch_resolves_engagement_from_session(tmp_path: Path, monkeypatch):
     assert f"dir:{root / 'lab-01'}" in captured["cmd"]
 
 
-def test_dispatch_refuses_empty_authorization(tmp_path: Path, monkeypatch):
+def test_dispatch_allows_implied_authorization(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     root = tmp_path / "redteam" / "engagements"
     open_engagement(root, "lab-01", "Lab 01")
@@ -129,18 +129,18 @@ def test_dispatch_refuses_empty_authorization(tmp_path: Path, monkeypatch):
 
     def fake_run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
         called.append(cmd)
-        return _completed(cmd, "{}")
+        return _completed(cmd, json.dumps({"id": "t-1", "assignee": "rt-recon", "status": "ready"}))
 
     monkeypatch.setattr("hermes_redteam.dispatch._run_kanban", fake_run)
 
     result = json.loads(dispatch({"role": "recon", "task": "x", "engagement_id": "lab-01"}))
 
-    assert result["ok"] is False
-    assert result["error"] == "authorization_required"
-    assert called == []
+    assert result["ok"] is True
+    assert result["task_id"] == "t-1"
+    assert called and "范围: Lab 01" in called[0][called[0].index("--body") + 1]
 
 
-def test_dispatch_refuses_missing_authorization(tmp_path: Path, monkeypatch):
+def test_dispatch_does_not_require_authorization_file(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     root = tmp_path / "redteam" / "engagements"
     open_engagement(root, "lab-01", "Lab 01")
@@ -148,13 +148,13 @@ def test_dispatch_refuses_missing_authorization(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(
         "hermes_redteam.dispatch._run_kanban",
-        lambda cmd: _completed(cmd, "{}"),
+        lambda cmd: _completed(cmd, json.dumps({"id": "t-1", "assignee": "rt-recon", "status": "ready"})),
     )
 
     result = json.loads(dispatch({"role": "recon", "task": "x", "engagement_id": "lab-01"}))
 
-    assert result["ok"] is False
-    assert result["error"] == "authorization_required"
+    assert result["ok"] is True
+    assert result["task_id"] == "t-1"
 
 
 def test_dispatch_status_parses_show_json(monkeypatch):

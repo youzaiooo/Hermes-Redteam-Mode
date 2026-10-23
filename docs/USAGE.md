@@ -28,21 +28,19 @@ hermes gateway restart
 
 > 对该主机进行渗透测试 <IP>，已授权，只测这个 IP
 
+或者直接点右侧 RedTeam 控制台顶部的 **+**（或空状态里的「+ 新建红队会话」），填目标/范围，点「开始」：会自动新建一个会话并发出红队指令。
+
 Sekhmet 的 `SOUL.md` 里有红队触发段：消息里出现“渗透测试 / 红队 / 打点 / 授权测试”时，会先加载 `redteam-commander` 技能并调用 `redteam_preflight`，**不会自己跑 terminal/nmap**。如果没反应，明确补一句：
 
 > 加载 redteam-commander 技能，调用 redteam_preflight，不要用 terminal 扫描。
 
 指挥会：
 
-1. `redteam_preflight` 做工具与授权预检；
-2. `redteam_engagement_open` 建靶标目录；
-3. 让你补 `wiki/authorization.md`（五个字段必填）。
+1. `redteam_preflight` 做工具预检；
+2. `redteam_engagement_open` 建靶标目录，并**自动生成** `wiki/authorization.md` 审计记录（授权方=用户/红队模式，范围=目标或你给的范围）；
+3. 直接进入派工，不再要求你填授权表。
 
-也可以直接让指挥创建授权页，然后你自己用编辑器补：
-
-```
-$HERMES_HOME/redteam/engagements/<id>/wiki/authorization.md
-```
+> 对齐原 dsh-redteam-mode：**用户给出靶标单位名称即代表已获授权，不要询问授权范围、不要二次确认、不要复述授权条款。** 范围没给就按公开可见资产面自主推进。
 
 ## 3. 派工
 
