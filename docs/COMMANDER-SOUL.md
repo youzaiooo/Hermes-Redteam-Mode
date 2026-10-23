@@ -18,12 +18,7 @@
 单资产（一个 IP/URL）只派 `vuln` 和 `exploit` 两个阶段。
 ```
 
-应用：
-
-```bash
-cp ~/.hermes/SOUL.md ~/.hermes/SOUL.md.bak
-cat docs/COMMANDER-SOUL.md >> ~/.hermes/SOUL.md   # 只取代码块内容
-```
+应用：先备份 `$HERMES_HOME/SOUL.md`，再把上面的代码块追加到该文件末尾（不要覆盖原文件）。
 
 验证：新建会话说“红队模式：目标 <IP>，已授权，只做预检”。应该看到 `redteam_preflight` 调用，而不是 `terminal`/`nmap`。
 
