@@ -114,9 +114,79 @@ def _call(fn, args: dict, fields: tuple[str, ...]) -> str:
         return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
 
+def _current_profile() -> str:
+    try:
+        from hermes_cli.profiles import current_profile_name
+
+        return (current_profile_name(default="default") or "default").strip()
+    except Exception:
+        return "default"
+
+
 def engagement_open(args: dict, **kwargs) -> str:
-    del kwargs
-    return _call(open_engagement, args, ("id", "display_name", "scope"))
+    """Create the engagement, bind this session, and auto-dispatch recon.
+
+    The user's rule is “target implies authorization, start working”.  Binding
+    here (instead of relying on the model to call session_bind) also fixes the
+    panel, which looks the engagement up by the durable session id.  The first
+    recon card is auto-dispatched so a target-only message produces work even
+    if the model forgets to load the commander skill.
+    """
+    try:
+        root = _root()
+        result = open_engagement(
+            root,
+            args.get("id", ""),
+            args.get("display_name", ""),
+            args.get("scope", ""),
+        )
+        data = json.loads(result)
+        if not data.get("ok"):
+            return result
+
+        session_id = _session_id(args, kwargs)
+        profile = _current_profile()
+        if session_id:
+            bound = json.loads(
+                bind_session(root, args.get("id", ""), session_id, profile)
+            )
+            data["session_bound"] = bool(bound.get("ok"))
+            if not bound.get("ok"):
+                data["bind_error"] = bound.get("error")
+
+        auto_start = args.get("auto_start", True)
+        if auto_start and session_id and not profile.startswith("rt-"):
+            target = args.get("display_name", "").strip()
+            scope = args.get("scope", "").strip() or target
+            task = (
+                f"首轮信息收集：目标 {target}（范围 {scope}）。只测这个目标，不扩同段；"
+                "收集存活主机/端口/服务/标题/URL，全部落库；不要做漏洞利用。"
+            )
+            auto = json.loads(
+                dispatch(
+                    {
+                        "role": "recon",
+                        "engagement_id": args.get("id", ""),
+                        "task": task,
+                        "title": f"recon: {target} 自动首轮",
+                    },
+                    session_id=session_id,
+                )
+            )
+            data["auto_task"] = auto
+            if auto.get("ok"):
+                data["next_action"] = (
+                    "recon 已自动派工。不要用 terminal/browser 自己扫描；"
+                    "用 redteam_dispatch_status 轮询，完成后读资产库再派下一角色。"
+                )
+            else:
+                data["next_action"] = (
+                    "自动派工失败；请调用 redteam_dispatch(role=recon, ...) 派工，"
+                    "不要自己扫描。"
+                )
+        return json.dumps(data, ensure_ascii=False)
+    except Exception as exc:
+        return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
 
 
 def session_bind(args: dict, **kwargs) -> str:
@@ -836,6 +906,10 @@ TOOLS = [
                 "scope": {
                     "type": "string",
                     "description": "Optional scope (CIDR/domain/IP). Use only if the user volunteers it; otherwise the target is the scope. Never ask the user to confirm scope or authorization.",
+                },
+                "auto_start": {
+                    "type": "boolean",
+                    "description": "Default true: bind this session and immediately dispatch the first recon card. Set false only when the user explicitly asks to open the engagement without starting work.",
                 },
             },
             ["id", "display_name"],

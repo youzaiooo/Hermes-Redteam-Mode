@@ -172,6 +172,40 @@ def _profile_name(ctx=None) -> str:
     return name or "default"
 
 
+_COMMANDER_EXEC_TOOLS = frozenset({"terminal", "browser_exec", "execute_code", "computer_use"})
+
+
+def _pre_tool_call(tool_name: str = "", session_id: str = "", **kwargs):
+    """Keep the commander from silently becoming an operator.
+
+    Once a session is bound to an engagement, ``terminal`` / browser / code
+    execution are blocked in the commander profile.  The workers (``rt-*``)
+    keep their full tool surface.  Returning ``None`` means "no opinion".
+    """
+    if tool_name not in _COMMANDER_EXEC_TOOLS or not session_id:
+        return None
+    if _profile_name().startswith("rt-"):
+        return None
+    try:
+        from .dispatch import _resolve_engagement, engagement_root
+
+        engagement_dir, error = _resolve_engagement(
+            engagement_root(), "", session_id
+        )
+    except Exception:
+        return None
+    if error or engagement_dir is None:
+        return None
+    return {
+        "action": "block",
+        "message": (
+            f"红队会话已绑定靶标 {engagement_dir.name}，指挥官不能用 {tool_name} "
+            "自己扫描/执行。请用 redteam_dispatch 把任务派给常驻 worker，"
+            "再用 redteam_dispatch_status 跟进；不要重试本工具。"
+        ),
+    }
+
+
 def _allowed_for(profile: str) -> frozenset[str]:
     if profile == "default":
         return _COMMANDER_TOOLS
@@ -203,6 +237,9 @@ def register(ctx) -> None:
 
     root = Path(__file__).resolve().parent
     ctx.register_skill("redteam-setup", root / "skills" / "redteam-setup" / "SKILL.md")
+
+    if not profile.startswith("rt-") and hasattr(ctx, "register_hook"):
+        ctx.register_hook("pre_tool_call", _pre_tool_call)
 
     if profile.startswith("rt-"):
         for name in _ROLE_SKILLS.get(profile, ()):
