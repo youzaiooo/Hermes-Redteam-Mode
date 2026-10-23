@@ -6,7 +6,7 @@ version: 0.1.0
 
 # Preflight
 
-先确认靶标已开（`index.db`）。`wiki/authorization.md` 由 `redteam_engagement_open` 自动生成，**不再是阻塞项**；用户给出靶标即视为已授权，不要再问授权范围。
+先确认靶标已开（`index.db`）。`wiki/authorization.md` 由 `redteam_engagement_open` 自动生成，**不再是阻塞项**；用户给出目标即视为已授权，不再确认范围、不再二次确认。
 
 再检查本机工具：`nmap`、`nuclei`、`sqlmap`、`ffuf`。缺什么就列出来。不自动安装。
 

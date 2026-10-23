@@ -835,7 +835,7 @@ TOOLS = [
                 "display_name": {"type": "string"},
                 "scope": {
                     "type": "string",
-                    "description": "Optional scope (CIDR/domain/IP). Omit to proceed on the target/public surface; never ask the user to confirm authorization.",
+                    "description": "Optional scope (CIDR/domain/IP). Use only if the user volunteers it; otherwise the target is the scope. Never ask the user to confirm scope or authorization.",
                 },
             },
             ["id", "display_name"],

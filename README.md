@@ -74,7 +74,7 @@ bash ~/src/hermes-redteam/scripts/install.sh
 
 ## 使用
 
-1. 在 Sekhmet（default）会话里说：**靶标单位名 +（可选）范围**；或点右侧面板顶部的 **+** 新建红队会话。给出靶标即视为已授权，指挥会调用 `redteam_preflight`。
+1. 在 Sekhmet（default）会话里说：**目标（IP/域名/单位名）**；或点右侧面板顶部的 **+** 新建红队会话。给出目标即视为已授权，指挥会调用 `redteam_preflight`。
 2. 指挥开靶标：`redteam_engagement_open` 自动生成 `wiki/authorization.md` 审计记录（不需要你填表）。
 3. 指挥按阶段派工：`redteam_dispatch(role=recon|asset|vuln|exploit|internal, task=...)`。
 4. `redteam_dispatch_status(task_id)` 跟进；卡片完成后读库核对成果。
@@ -82,7 +82,7 @@ bash ~/src/hermes-redteam/scripts/install.sh
 
 ## 安全边界
 
-- 没开靶标 / 没绑定会话，`redteam_dispatch` 拒绝派工；用户给出靶标即视为授权（对齐原 dsh-redteam-mode），`authorization.md` 由 `redteam_engagement_open` 自动生成作为审计记录，不需要用户填表。
+- 没开靶标 / 没绑定会话，`redteam_dispatch` 拒绝派工；用户给出目标即视为授权（对齐原 dsh-redteam-mode），`authorization.md` 由 `redteam_engagement_open` 自动生成作为审计记录，不需要用户填表。
 - 派工卡片带靶标目录与范围，worker 只测卡片内的目标。
 - 凭据只存指针/来源，命令正文与 payload 不入库。
 - 演练事实不进记忆、不进共享 Wiki；整个靶标目录可直接删除。

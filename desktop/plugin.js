@@ -23,7 +23,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 const ID = 'hermes-redteam'
 const POLL_MS = 4000
 // Keep in sync with plugin.yaml `version`; tests/test_version_sync.py guards it.
-const DESKTOP_VERSION = '0.3.2'
+const DESKTOP_VERSION = '0.3.3'
 
 const TABS = [
   ['situation', '态势'],
@@ -425,26 +425,20 @@ function header({ engagement, bound, refresh, onClear, onNew }) {
   })
 }
 
-function newSessionForm({ target, scope, setTarget, setScope, onStart, onCancel }) {
+function newSessionForm({ target, setTarget, onStart, onCancel }) {
   return jsxs('div', {
     className: 'flex flex-col gap-2 px-3 py-3',
     children: [
       jsx('div', { className: 'text-sm font-medium text-(--ui-text-primary)', children: '新建红队会话' }),
       jsx('div', {
         className: 'text-xs text-(--ui-text-tertiary)',
-        children: '输入目标和可选范围。给出目标即视为已授权，不会再问授权字段。'
+        children: '输入目标即可。给出目标即视为已授权，不再确认范围、不再二次确认。'
       }),
       jsx('input', {
         className: 'w-full rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-primary) px-2 py-1.5 text-xs text-(--ui-text-primary) outline-none',
         placeholder: '目标 IP / 域名 / 单位名',
         value: target,
         onChange: (event) => setTarget(event.target.value)
-      }),
-      jsx('input', {
-        className: 'w-full rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-primary) px-2 py-1.5 text-xs text-(--ui-text-primary) outline-none',
-        placeholder: '范围（可选，默认只测目标）',
-        value: scope,
-        onChange: (event) => setScope(event.target.value)
       }),
       jsxs('div', {
         className: 'flex items-center gap-2',
@@ -491,7 +485,6 @@ function Pane({ rest }) {
   const [manualId, setManualId] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [newTarget, setNewTarget] = useState('')
-  const [newScope, setNewScope] = useState('')
   const activeSessionId = useValue(host.state.activeSessionId)
   const gatewayState = useValue(host.state.gateway)
   const queryClient = useQueryClient()
@@ -577,8 +570,7 @@ function Pane({ rest }) {
       host.notify({ kind: 'warning', message: '请先输入目标' })
       return
     }
-    const scope = newScope.trim() || target
-    const prompt = `红队模式：目标 ${target}，范围 ${scope}，已授权，只测这个范围。请加载 redteam-commander 技能，先调用 redteam_preflight，再调用 redteam_engagement_open 建靶标并绑定当前会话，然后按阶段派工。`
+    const prompt = `红队模式：目标 ${target}，已授权，只测这个目标。请加载 redteam-commander 技能，先调用 redteam_preflight，再调用 redteam_engagement_open 建靶标并绑定当前会话，然后按阶段派工。`
     setShowNew(false)
     host.newChat('default')
     await new Promise((resolve) => setTimeout(resolve, 350))
@@ -604,7 +596,6 @@ function Pane({ rest }) {
       if (host.composer && host.composer.focus) host.composer.focus(null)
     }
     setNewTarget('')
-    setNewScope('')
   }
 
   const state = {
@@ -653,9 +644,7 @@ function Pane({ rest }) {
       showNew
         ? newSessionForm({
             target: newTarget,
-            scope: newScope,
             setTarget: setNewTarget,
-            setScope: setNewScope,
             onStart: startRedteamSession,
             onCancel: () => setShowNew(false)
           })
