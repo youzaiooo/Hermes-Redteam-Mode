@@ -19,6 +19,13 @@ cp "$REPO_DIR/desktop/plugin.js" "$HERMES_HOME/desktop-plugins/hermes-redteam/pl
 # package marker makes the app treat it as a managed copy and skip it.
 rm -f "$HERMES_HOME/desktop-plugins/hermes-redteam/.hermes-package.json"
 
+echo "==> sync commander user skill (a stale local copy shadows the plugin)"
+COMMANDER_SKILL="$HERMES_HOME/skills/redteam-commander/SKILL.md"
+if [ -f "$COMMANDER_SKILL" ]; then
+  cp "$COMMANDER_SKILL" "$COMMANDER_SKILL.bak-install" 2>/dev/null || true
+  cp "$REPO_DIR/skills/redteam-commander/SKILL.md" "$COMMANDER_SKILL"
+fi
+
 echo "==> enable for default + rt-* profiles"
 "$HERMES" plugins enable hermes-redteam --no-allow-tool-override >/dev/null 2>&1 || true
 for profile in rt-recon rt-asset rt-vuln rt-exploit rt-internal; do
