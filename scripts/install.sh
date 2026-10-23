@@ -41,3 +41,15 @@ Done. Next:
   2) Hermes desktop -> 右上角「显示右侧栏」-> RedTeam 控制台
   3) 命令面板 ⌘K -> Reload desktop plugins（如果面板没出现）
 EOF
+
+if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+  cat <<'EOF'
+
+Note: 当前没有图形会话。如果 Hermes desktop 在另一台电脑上（远程网关场景），
+请在**桌面端所在电脑**上安装桌面半边，二选一：
+  - App 内：设置 -> 插件 -> Install from Git -> youzaiooo/Hermes-Redteam-Mode
+            勾选 "Desktop target" -> Reload desktop plugins -> 启用插件
+  - 或运行仓库里的 scripts/install-desktop.sh（Windows 用 install-desktop.ps1）
+详见 docs/REMOTE.md
+EOF
+fi

@@ -56,6 +56,18 @@ bash ~/src/hermes-redteam/scripts/install.sh
 
 桌面半边在开发态由 app 从 checkout 热同步；如果没出现，删掉 `~/.hermes/desktop-plugins/hermes-redteam/.hermes-package.json`（让 app 把它当独立插件加载），再 Reload。
 
+### 远程桌面（桌面端在另一台电脑）
+
+桌面 App 与 Sekhmet 网关不在同一台机器时，**agent half 装在网关，desktop half 装在客户端**：
+
+1. 网关（Kali）按方式 A 安装并 `hermes gateway restart`。
+2. 客户端（运行 Hermes desktop 的电脑）：设置 → 插件 → **Install from Git** → `youzaiooo/Hermes-Redteam-Mode` → **勾选 Desktop target** → Reload desktop plugins → 在插件页启用 `hermes-redteam`。
+3. 一键安装链接：`hermes://plugin/install?repo=youzaiooo/Hermes-Redteam-Mode&enable=1`
+
+没有 Git 安装入口时，在客户端运行 `scripts/install-desktop.sh`（Windows 用 `scripts/install-desktop.ps1`）。
+
+完整检查清单与排障见 [docs/REMOTE.md](docs/REMOTE.md)。
+
 ## 使用
 
 1. 在 Sekhmet（default）会话里说：**靶标单位名 + 范围**。指挥会调用 `redteam_preflight`。
