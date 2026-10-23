@@ -1,5 +1,5 @@
 name: hermes-redteam
-version: 0.3.3
+version: 0.3.4
 description: "Authorized red-team command console: commander + five permanent rt-* worker profiles, per-engagement fact store, Chinese desktop panel."
 author: Youzai
 kind: standalone

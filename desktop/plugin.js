@@ -23,7 +23,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 const ID = 'hermes-redteam'
 const POLL_MS = 4000
 // Keep in sync with plugin.yaml `version`; tests/test_version_sync.py guards it.
-const DESKTOP_VERSION = '0.3.3'
+const DESKTOP_VERSION = '0.3.4'
 
 const TABS = [
   ['situation', '态势'],
@@ -485,7 +485,9 @@ function Pane({ rest }) {
   const [manualId, setManualId] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [newTarget, setNewTarget] = useState('')
-  const activeSessionId = useValue(host.state.activeSessionId)
+  const runtimeSessionId = useValue(host.state.activeSessionId)
+  const storedSessionId = useValue(host.state.focusedStoredSessionId)
+  const activeSessionId = storedSessionId || runtimeSessionId
   const gatewayState = useValue(host.state.gateway)
   const queryClient = useQueryClient()
   const versionQuery = useRest(rest, ['plugin-version'], '/version')
@@ -570,7 +572,7 @@ function Pane({ rest }) {
       host.notify({ kind: 'warning', message: '请先输入目标' })
       return
     }
-    const prompt = `红队模式：目标 ${target}，已授权，只测这个目标。请加载 redteam-commander 技能，先调用 redteam_preflight，再调用 redteam_engagement_open 建靶标并绑定当前会话，然后按阶段派工。`
+    const prompt = `红队模式：目标 ${target}，已授权。不要询问范围或下一步，直接开始信息收集：先调用 redteam_preflight，再调用 redteam_engagement_open 建靶标并绑定当前会话，然后立即派 recon；recon 完成后读库并自动继续漏洞发现/利用，直到收口。`
     setShowNew(false)
     host.newChat('default')
     await new Promise((resolve) => setTimeout(resolve, 350))
