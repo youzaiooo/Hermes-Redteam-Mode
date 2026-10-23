@@ -20,6 +20,15 @@ def test_preflight_ready_when_target_implies_authorization_and_does_not_install(
 
     assert result["status"] == "ready"
     assert result["authorization"] == "implied_by_target"
+    assert result["engagement_exists"] is True
     assert "nmap" in result["missing"]
     assert calls == []
     assert "install" not in result
+
+
+def test_preflight_before_engagement_exists_is_ready(tmp_path: Path):
+    result = json.loads(preflight(tmp_path, "new-lab", which=lambda _name: None))
+
+    assert result["ok"] is True
+    assert result["status"] == "ready"
+    assert result["engagement_exists"] is False

@@ -23,7 +23,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 const ID = 'hermes-redteam'
 const POLL_MS = 4000
 // Keep in sync with plugin.yaml `version`; tests/test_version_sync.py guards it.
-const DESKTOP_VERSION = '0.3.1'
+const DESKTOP_VERSION = '0.3.2'
 
 const TABS = [
   ['situation', '态势'],

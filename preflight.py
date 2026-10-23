@@ -14,8 +14,7 @@ def preflight(root: Path, engagement_id: str, which=None, install=None) -> str:
     locator = which or shutil.which
     missing = [name for name in _REQUIRED if locator(name) is None]
     base = Path(root) / engagement_id
-    if not (base / "index.db").is_file():
-        return json.dumps({"ok": False, "error": "not_found"}, ensure_ascii=False)
+    engagement_exists = (base / "index.db").is_file()
     skills = sorted(path.parent.name for path in (Path(__file__).resolve().parent / "skills").glob("*/SKILL.md"))
     return json.dumps(
         {
@@ -23,6 +22,7 @@ def preflight(root: Path, engagement_id: str, which=None, install=None) -> str:
             "status": "ready",
             # Original dsh-redteam-mode rule: naming a target implies authorization.
             "authorization": "implied_by_target",
+            "engagement_exists": engagement_exists,
             "missing": missing,
             "skill_count": len(skills),
             "skills": skills,

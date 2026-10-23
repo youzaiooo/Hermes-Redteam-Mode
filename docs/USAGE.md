@@ -78,7 +78,7 @@ redteam_dispatch {
 ## 5. 常见问题
 
 **派工返回 `authorization_required`**
-这个错误已移除：现在给出靶标即视为授权。若仍遇到，说明跑的是旧版插件，更新到 0.3.1 后重启 dashboard/gateway。
+这个错误已移除：现在给出靶标即视为授权。若仍遇到，说明跑的是旧版插件，更新到 0.3.2 后重启 dashboard/gateway。
 
 **派工返回 `not_found` / `session_unbound`**
 当前会话还没开/绑定靶标。让指挥先 `redteam_engagement_open`，或点面板的「+ 新建红队会话」。
