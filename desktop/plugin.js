@@ -423,12 +423,15 @@ function tabsBar(tab, setTab) {
   })
 }
 
-function footer(mode) {
-  const text = mode === 'bound'
+function footer(mode, gatewayState) {
+  const base = mode === 'bound'
     ? '只读索引。不显示命令、凭据或 payload。'
     : mode === 'manual'
       ? '手动查看历史演练（本会话未绑定）'
       : '未绑定靶标 · 新会话不继承上一次演练'
+  const text = gatewayState && gatewayState !== 'open'
+    ? `网关${gatewayState === 'connecting' ? '连接中' : '未连接'} · 显示上次数据`
+    : base
   return jsx('div', {
     className: 'border-t border-(--ui-stroke-secondary) px-3 py-1.5 text-[0.6875rem] text-(--ui-text-quaternary)',
     children: text
@@ -439,6 +442,7 @@ function Pane({ rest }) {
   const [tab, setTab] = useState('situation')
   const [manualId, setManualId] = useState('')
   const activeSessionId = useValue(host.state.activeSessionId)
+  const gatewayState = useValue(host.state.gateway)
   const queryClient = useQueryClient()
 
   // A new session must start clean: drop any manual selection when the active
@@ -489,7 +493,7 @@ function Pane({ rest }) {
       .then((found) => {
         if (found && found.path) download(found.path, 'report-index.md')
       })
-      .catch(() => {})
+      .catch((error) => host.notifyError(error, '报告导出失败'))
   }
 
   const state = {
@@ -526,7 +530,7 @@ function Pane({ rest }) {
           children: engagement ? tabChildren(state) : unboundChildren(listed, setManualId)
         })
       }),
-      footer(footerMode)
+      footer(footerMode, gatewayState)
     ]
   })
 }
