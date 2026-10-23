@@ -61,8 +61,11 @@ bash ~/src/hermes-redteam/scripts/install.sh
 
 桌面 App 与 Sekhmet 网关不在同一台机器时，**agent half 装在网关，desktop half 装在客户端**：
 
-1. 网关（Kali）按方式 A 安装并 `hermes gateway restart`。
-2. 客户端（运行 Hermes desktop 的电脑）：设置 → 插件 → **Install from Git** → `youzaiooo/Hermes-Redteam-Mode` → **勾选 Desktop target** → Reload desktop plugins → 在插件页启用 `hermes-redteam`。
+1. 网关（Kali）按方式 A 安装并重启 dashboard + gateway。
+2. 客户端（运行 Hermes desktop 的电脑）：设置 → 插件 → **Install from Git** → `youzaiooo/Hermes-Redteam-Mode` → 安装。
+   - 弹窗有 Agent/Desktop 勾选框时只勾 **Desktop**；
+   - 弹窗只有「此包包含」列表时直接安装（agent half 会装到已连接的 default 后端，桌面 UI 装到本机）。
+   - 已存在时打开「强制重装」。装完 Reload desktop plugins 并启用。
 3. 一键安装链接：`hermes://plugin/install?repo=youzaiooo/Hermes-Redteam-Mode&enable=1`
 
 没有 Git 安装入口时，在客户端运行 `scripts/install-desktop.sh`（Windows 用 `scripts/install-desktop.ps1`）。

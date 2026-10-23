@@ -37,9 +37,12 @@ ss -ltnp | grep 9119
 1. Hermes desktop → 设置 → **插件 / Capabilities → Plugins**
 2. **Install from Git**
 3. 仓库填：`youzaiooo/Hermes-Redteam-Mode`
-4. **勾选 Desktop target**（只装桌面半边；agent half 已经在网关上）
-5. 安装后：命令面板（`Ctrl/⌘ + K`）→ **Reload desktop plugins**
-6. **Capabilities → Plugins → hermes-redteam → 打开**（桌面半边默认是关闭的）
+4. 安装弹窗按版本不同有两种样子：
+   - **有 Agent / Desktop 勾选框**：只勾 **Desktop**（agent half 已经在网关上）。
+   - **没有勾选框，只有「此包包含」列表**：这是新版统一安装，直接安装即可。列表里的「智能体插件」会装到**已连接的 default 后端**（也就是远程 Sekhmet），「桌面 UI」会装到**本机** `desktop-plugins/`——这正是远程需要的两半，不需要 Desktop-only 选项。
+5. 插件已存在时，打开 **强制重装（替换已存在的安装）** 再点安装。
+6. 安装后：`Ctrl/⌘ + K` → **Reload desktop plugins**；在插件页启用 `hermes-redteam`。
+7. 网关侧重启 dashboard 和 gateway（见第 1 节），让新 API 路由生效。
 
 也可以直接打开这个一键链接（在桌面端所在电脑上点）：
 
