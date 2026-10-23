@@ -74,8 +74,8 @@ bash ~/src/hermes-redteam/scripts/install.sh
 
 ## 使用
 
-1. 在 Sekhmet（default）会话里说：**靶标单位名 + 范围**。指挥会调用 `redteam_preflight`。
-2. 指挥开靶标：`redteam_engagement_open`，让你补 `wiki/authorization.md`（授权方/范围/时间窗/允许手段/联系人）。
+1. 在 Sekhmet（default）会话里说：**靶标单位名 +（可选）范围**；或点右侧面板顶部的 **+** 新建红队会话。给出靶标即视为已授权，指挥会调用 `redteam_preflight`。
+2. 指挥开靶标：`redteam_engagement_open` 自动生成 `wiki/authorization.md` 审计记录（不需要你填表）。
 3. 指挥按阶段派工：`redteam_dispatch(role=recon|asset|vuln|exploit|internal, task=...)`。
 4. `redteam_dispatch_status(task_id)` 跟进；卡片完成后读库核对成果。
 5. 右侧面板实时显示：当前得分、五阶段、资产/漏洞/凭据/隧道、worker 角色、报告索引、技能可用性。

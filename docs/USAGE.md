@@ -78,10 +78,10 @@ redteam_dispatch {
 ## 5. 常见问题
 
 **派工返回 `authorization_required`**
-授权页缺失或五个字段有空值。补 `wiki/authorization.md` 后重试。
+这个错误已移除：现在给出靶标即视为授权。若仍遇到，说明跑的是旧版插件，更新到 0.3.0 后重启 dashboard/gateway。
 
-**派工返回 `session_unbound`**
-当前会话还没绑定靶标。让指挥先 `redteam_session_bind`，或在 `redteam_dispatch` 里显式传 `engagement_id`。
+**派工返回 `not_found` / `session_unbound`**
+当前会话还没开/绑定靶标。让指挥先 `redteam_engagement_open`，或点面板的「+ 新建红队会话」。
 
 **卡片一直 running**
 `hermes kanban show <id>` 看 worker 进程；`hermes -p rt-recon chat -q "ping"` 检查该 profile 的模型是否可用。

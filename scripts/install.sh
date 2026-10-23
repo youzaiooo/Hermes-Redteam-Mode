@@ -52,7 +52,9 @@ if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
 Note: 当前没有图形会话。如果 Hermes desktop 在另一台电脑上（远程网关场景），
 请在**桌面端所在电脑**上安装桌面半边，二选一：
   - App 内：设置 -> 插件 -> Install from Git -> youzaiooo/Hermes-Redteam-Mode
-            勾选 "Desktop target" -> Reload desktop plugins -> 启用插件
+            有 Agent/Desktop 勾选时只勾 Desktop；只有「此包包含」列表时直接安装
+            （agent half 会装到已连接的 default 后端，桌面 UI 装到本机）
+            已存在时打开「强制重装」-> Reload desktop plugins -> 启用插件
   - 或运行仓库里的 scripts/install-desktop.sh（Windows 用 install-desktop.ps1）
 详见 docs/REMOTE.md
 EOF

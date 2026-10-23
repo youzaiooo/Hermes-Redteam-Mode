@@ -34,12 +34,6 @@ def engagement_root() -> Path:
         return home / "redteam" / "engagements"
 
 
-def _authorization_ok(engagement_dir: Path) -> bool:
-    # Original dsh-redteam-mode rule: naming a target implies authorization.
-    # The engagement's existence (index.db) is the audit record; never gate on a form.
-    return (engagement_dir / "index.db").is_file()
-
-
 def _resolve_engagement(root: Path, explicit: str, session_id: str) -> tuple[Path | None, str]:
     if explicit:
         if not _ENGAGEMENT_ID_RE.match(explicit):
@@ -132,9 +126,6 @@ def dispatch(args: dict, session_id: str = "", task_id: str = "", parent_agent: 
     if error:
         return json.dumps({"ok": False, "error": error}, ensure_ascii=False)
     assert engagement_dir is not None
-
-    if not _authorization_ok(engagement_dir):
-        return json.dumps({"ok": False, "error": "authorization_required"}, ensure_ascii=False)
 
     assignee = f"rt-{role}"
     title = str(args.get("title", "")).strip() or task

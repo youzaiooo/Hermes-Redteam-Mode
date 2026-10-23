@@ -7,7 +7,6 @@ import shutil
 from pathlib import Path
 
 _REQUIRED = ("nmap", "nuclei", "sqlmap", "ffuf")
-_AUTH_EMPTY = "待填写"
 
 
 def preflight(root: Path, engagement_id: str, which=None, install=None) -> str:
