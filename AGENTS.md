@@ -2,7 +2,7 @@
 
 ## Mission
 
-Maintain the shipped `hermes-redteam` plugin (v0.3.2) as a working red-team command console on
+Maintain the shipped `hermes-redteam` plugin (v0.3.3) as a working red-team command console on
 Hermes, stronger than the DSH reference plugin
 (`https://github.com/Jueze-2019/dsh-redteam-mode`, checkout at `/home/kali/src/dsh-redteam-mode`).
 
@@ -35,7 +35,7 @@ tools/skills to be rolled out to specialists independently.
 | Hermes source | `/home/kali/.hermes/hermes-agent` (v0.22.2) |
 | Hermes CLI | `/home/kali/.local/bin/hermes` |
 | Plugin install | `~/.hermes/plugins/hermes-redteam` (GitHub install, not a symlink) |
-| Desktop half copy | `~/.hermes/desktop-plugins/hermes-redteam/plugin.js` (v0.3.2) |
+| Desktop half copy | `~/.hermes/desktop-plugins/hermes-redteam/plugin.js` (v0.3.3) |
 | Tests | `env -u PYTHONPATH /usr/bin/python3 -m pytest tests -q` (141 passed, 1 skipped) |
 | DSH upstream | `/home/kali/src/dsh-redteam-mode` (v0.14.0) + `docs/详细文档.md` |
 | Live DSH console | `http://192.168.10.142:3080` (reference only; optional) |
@@ -160,6 +160,6 @@ global knowledge FTS5 + report export.
 
 0.2.x: remote desktop install, version handshake + one-click local UI update.
 0.3.x: implied authorization (original DSH rule), preflight is a tool only, `+ 新建红队会话`
-button. Current version **0.3.2**; 141 tests green.
+button. Current version **0.3.3**; 141 tests green.
 
 Remaining optional work: full 25–point scoring table, rt-internal lab run, UI polish.
