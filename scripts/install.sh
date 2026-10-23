@@ -37,9 +37,13 @@ echo "==> doctor"
 cat <<'EOF'
 
 Done. Next:
-  1) hermes gateway restart
-  2) Hermes desktop -> 右上角「显示右侧栏」-> RedTeam 控制台
-  3) 命令面板 ⌘K -> Reload desktop plugins（如果面板没出现）
+  1) 重启 dashboard（远程桌面 App 连的是它，新 API 路由才会生效）：
+       systemctl --user restart hermes-dashboard.service
+     没有 systemd 的话，重启你手动跑的 `hermes dashboard` 进程。
+  2) 重启 gateway（派工/工具）：
+       hermes gateway restart
+  3) Hermes desktop -> 右上角「显示右侧栏」-> RedTeam 控制台
+  4) 命令面板 ⌘K -> Reload desktop plugins（如果面板没出现）
 EOF
 
 if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then

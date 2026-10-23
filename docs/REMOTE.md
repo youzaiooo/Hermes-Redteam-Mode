@@ -16,9 +16,12 @@
 ```bash
 hermes plugins install youzaiooo/Hermes-Redteam-Mode --enable
 bash ~/.hermes/plugins/hermes-redteam/scripts/install.sh
-hermes gateway restart
-hermes plugins doctor hermes-redteam     # 应为 19 tools
+systemctl --user restart hermes-dashboard.service   # 远程 App 连的是 dashboard
+hermes gateway restart                               # 派工/工具
+hermes plugins doctor hermes-redteam                 # 应为 19 tools
 ```
+
+> **为什么 dashboard 也要重启**：远程桌面 App 连的是 `hermes dashboard`（默认 9119），插件的 `/api/plugins/hermes-redteam/*` 路由由它挂载。只重启 gateway 不会让新路由生效，更新后就会出现「面板还在、接口 404」。
 
 网关需要监听 WireGuard 可达的地址。确认：
 

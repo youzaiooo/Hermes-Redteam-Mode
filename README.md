@@ -42,9 +42,10 @@ bash ~/.hermes/plugins/hermes-redteam/scripts/install.sh
 
 然后：
 
-1. 重启网关：`hermes gateway restart`
-2. 打开 Hermes desktop → 右上角 **显示右侧栏** → 选择 **RedTeam 控制台**
-3. 没有面板时：⌘K → **Reload desktop plugins**
+1. 重启 dashboard（远程桌面 App 连的是它）：`systemctl --user restart hermes-dashboard.service`
+2. 重启 gateway（派工/工具）：`hermes gateway restart`
+3. 打开 Hermes desktop → 右上角 **显示右侧栏** → 选择 **RedTeam 控制台**
+4. 没有面板时：⌘K → **Reload desktop plugins**
 
 ### 方式 B：源码开发
 
