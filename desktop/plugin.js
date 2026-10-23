@@ -17,7 +17,7 @@ import {
   useQueryClient,
   useValue
 } from '@hermes/plugin-sdk'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'hermes-redteam'
@@ -262,7 +262,7 @@ function reportChildren({ engagement, reportPath, loading, error, exportReport }
     jsxs('div', {
       className: 'flex flex-col gap-1.5',
       children: [
-        jsx('div', { className: 'text-xs text-(--ui-text-tertiary)', children: '最新报告' }),
+        jsx('div', { className: 'text-xs text-(--ui-text-tertiary)', children: '报告索引' }),
         jsxs('div', {
           className: 'flex items-center gap-2 rounded border border-(--ui-stroke-secondary) px-2 py-1.5',
           children: [
@@ -273,14 +273,15 @@ function reportChildren({ engagement, reportPath, loading, error, exportReport }
             jsx(Button, {
               variant: 'secondary',
               size: 'sm',
+              disabled: !reportPath,
               onClick: exportReport,
-              children: '导出 Markdown'
+              children: '导出'
             })
           ]
         })
       ]
     }),
-    jsx('div', { className: 'text-xs text-(--ui-text-quaternary)', children: '导出时从靶标数据库即时生成 Markdown' })
+    jsx('div', { className: 'text-xs text-(--ui-text-quaternary)', children: '报告与得分报告由报告索引页汇总' })
   ]
 }
 
@@ -315,6 +316,38 @@ function resourcesChildren({ skillNames, roleNames, loading, error }) {
   ]
 }
 
+function unboundChildren(listed, onPick) {
+  return [
+    jsxs('div', {
+      className: 'flex flex-col gap-1 py-2',
+      children: [
+        jsx('div', { className: 'text-sm font-medium text-(--ui-text-primary)', children: '未绑定靶标' }),
+        jsx('div', {
+          className: 'text-xs text-(--ui-text-tertiary)',
+          children: '新会话不会继承上一次演练。在 Sekhmet 会话里说：目标 <单位名>，我会开靶标并绑定当前会话。'
+        })
+      ]
+    }),
+    listed.length
+      ? jsxs('div', {
+          className: 'flex flex-col gap-1.5',
+          children: [
+            jsx('div', { className: 'text-xs font-medium text-(--ui-text-primary)', children: '手动查看最近演练' }),
+            ...listed.slice(0, 5).map((item) =>
+              jsx(Button, {
+                variant: 'ghost',
+                size: 'sm',
+                className: 'justify-start',
+                onClick: () => onPick(item.id),
+                children: item.display_name || item.id
+              }, item.id)
+            )
+          ]
+        })
+      : null
+  ]
+}
+
 function tabChildren(state) {
   switch (state.tab) {
     case 'assets':
@@ -339,7 +372,7 @@ function tabChildren(state) {
   }
 }
 
-function header({ engagement, refresh }) {
+function header({ engagement, bound, refresh, onClear }) {
   return jsxs('div', {
     className: 'flex items-center justify-between gap-2 border-b border-(--ui-stroke-secondary) px-3 py-2',
     children: [
@@ -350,13 +383,22 @@ function header({ engagement, refresh }) {
             className: 'text-[0.8125rem] font-semibold text-(--ui-text-primary)',
             children: 'RedTeam 控制台'
           }),
-          jsx(StatusDot, { tone: engagement ? 'good' : 'muted' })
+          jsx(StatusDot, { tone: bound ? 'good' : 'muted' })
         ]
       }),
       jsx('span', {
         className: 'min-w-0 flex-1 truncate text-right text-xs text-(--ui-text-tertiary)',
         children: engagement ? engagement.display_name : '未绑定靶标'
       }),
+      engagement && !bound
+        ? jsx(Button, {
+            variant: 'ghost',
+            size: 'icon-xs',
+            title: '清除手动选择',
+            onClick: onClear,
+            children: jsx(Codicon, { name: 'close', size: 12 })
+          })
+        : null,
       jsx(Button, {
         variant: 'ghost',
         size: 'icon-xs',
@@ -381,19 +423,29 @@ function tabsBar(tab, setTab) {
   })
 }
 
-function footer(unboundHint) {
+function footer(mode) {
+  const text = mode === 'bound'
+    ? '只读索引。不显示命令、凭据或 payload。'
+    : mode === 'manual'
+      ? '手动查看历史演练（本会话未绑定）'
+      : '未绑定靶标 · 新会话不继承上一次演练'
   return jsx('div', {
     className: 'border-t border-(--ui-stroke-secondary) px-3 py-1.5 text-[0.6875rem] text-(--ui-text-quaternary)',
-    children: unboundHint
-      ? '本会话未绑靶标，显示最近一次演练'
-      : '只读索引。不显示命令、凭据或 payload。'
+    children: text
   })
 }
 
 function Pane({ rest }) {
   const [tab, setTab] = useState('situation')
+  const [manualId, setManualId] = useState('')
   const activeSessionId = useValue(host.state.activeSessionId)
   const queryClient = useQueryClient()
+
+  // A new session must start clean: drop any manual selection when the active
+  // session changes (including to null on a fresh, unbound session).
+  useEffect(() => {
+    setManualId('')
+  }, [activeSessionId])
 
   const forSession = useRest(
     rest,
@@ -406,9 +458,10 @@ function Pane({ rest }) {
   const listed = engagementsQuery.data && Array.isArray(engagementsQuery.data.engagements)
     ? engagementsQuery.data.engagements
     : []
-  const engagement = bound || listed[0] || null
+  const manual = manualId ? listed.find((item) => item.id === manualId) || null : null
+  const engagement = bound || manual || null
   const engagementId = engagement ? engagement.id : null
-  const unboundHint = Boolean(engagement) && !bound
+  const footerMode = !engagement ? 'none' : bound ? 'bound' : 'manual'
 
   const summary = useRest(rest, ['summary', engagementId], engagementId ? `/summary/${engagementId}` : null)
   const assets = useRest(rest, ['assets', engagementId], engagementId ? `/assets/${engagementId}` : null)
@@ -424,9 +477,7 @@ function Pane({ rest }) {
   const vulnRows = findings.data && Array.isArray(findings.data.vulns) ? findings.data.vulns : []
   const credRows = credentials.data && Array.isArray(credentials.data.credentials) ? credentials.data.credentials : []
   const tunnelRows = tunnels.data && Array.isArray(tunnels.data.tunnels) ? tunnels.data.tunnels : []
-  const reportPath = report.data && report.data.ok !== false
-    ? (report.data.relative_path || report.data.path || '')
-    : ''
+  const reportPath = report.data && report.data.path ? report.data.path : ''
   const skillNames = skills.data && Array.isArray(skills.data.skills) ? skills.data.skills : []
   const roleNames = roles.data && Array.isArray(roles.data.roles) ? roles.data.roles : FALLBACK_ROLES
 
@@ -436,10 +487,7 @@ function Pane({ rest }) {
     const download = captureGatewayFileDownload()
     rest(`/report/${engagementId}`)
       .then((found) => {
-        if (found && found.path) {
-          const name = found.filename || (found.relative_path || 'report.md').split('/').pop()
-          download(found.path, name)
-        }
+        if (found && found.path) download(found.path, 'report-index.md')
       })
       .catch(() => {})
   }
@@ -447,7 +495,6 @@ function Pane({ rest }) {
   const state = {
     tab,
     engagement,
-    unboundHint,
     summaryData,
     assetRows,
     vulnRows,
@@ -470,16 +517,16 @@ function Pane({ rest }) {
   return jsxs('div', {
     className: 'flex h-full flex-col text-sm text-(--ui-text-secondary)',
     children: [
-      header({ engagement, refresh }),
+      header({ engagement, bound, refresh, onClear: () => setManualId('') }),
       tabsBar(tab, setTab),
       jsx(ScrollArea, {
         className: 'min-h-0 flex-1',
         children: jsx('div', {
           className: 'flex flex-col gap-3 px-3 py-3',
-          children: tabChildren(state)
+          children: engagement ? tabChildren(state) : unboundChildren(listed, setManualId)
         })
       }),
-      footer(unboundHint)
+      footer(footerMode)
     ]
   })
 }
